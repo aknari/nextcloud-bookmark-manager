@@ -1,0 +1,52 @@
+{
+  "header": "Ripara Titoli",
+  "label": {
+    "scope": "Ambito",
+    "what": "Ripara i titoli e le descrizioni corrotti da una codifica errata (mojibake): prima in locale con una ricodifica deterministica, poi recuperando il titolo reale dalla pagina se necessario.",
+    "fill_desc": "Compila le descrizioni vuote dalla pagina"
+  },
+  "hint": {
+    "fill_desc": "Per i segnalibri senza descrizione, recupera la meta descrizione della pagina. Molte richieste web — può richiedere tempo."
+  },
+  "scope": {
+    "selected": "Solo i segnalibri selezionati",
+    "all": "Tutti i segnalibri"
+  },
+  "field": {
+    "title": "Titolo",
+    "description": "Descrizione"
+  },
+  "progress": {
+    "fetch": "Recupero di titoli e descrizioni dal web… {{current}} di {{total}}",
+    "apply": "Applicazione {{current}} di {{total}}"
+  },
+  "summary": {
+    "recovered": "{{recovered}} di {{total}} segnalibri recuperati ({{local}} locali, {{web}} web, {{both}} entrambi).",
+    "unrecoverable": "{{count}} non recuperabili.",
+    "skipped": "{{count}} non completati (la pagina non ha fornito le informazioni mancanti).",
+    "none": "Nessun titolo o descrizione corrotta trovata nell'ambito selezionato.",
+    "approx": "{{count}} riparati approssimativamente (decodifica parziale — controllali prima di applicare)."
+  },
+  "badge": {
+    "local": "locale",
+    "web": "web",
+    "both": "locale + web",
+    "approx": "approx"
+  },
+  "unrecoverable": "non recuperabile",
+  "button": {
+    "start": "Analizza",
+    "apply": "Applica al Server",
+    "applying": "Applicazione…",
+    "close": "Chiudi"
+  },
+  "error": {
+    "noapply_title": "Nessuna modifica da applicare",
+    "noapply_content": "Nessuna modifica recuperata è accettata. Attiva elementi o riavvia l'analisi."
+  },
+  "done": {
+    "applied": "Aggiornati {{applied}} segnalibri.",
+    "failed": "{{failed}} falliti.",
+    "title": "Riparazione Titoli Completata"
+  }
+}

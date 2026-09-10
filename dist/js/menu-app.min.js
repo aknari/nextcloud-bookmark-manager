@@ -7,8 +7,8 @@ const {
 } = require( 'electron' )
 
 const path 			= require('path')
-const name 			= app.name
 const log			= require( 'electron-log' )
+const Store			= require( 'electron-store' )
 
 const about 		= require('./about.min')
 const favicons  	= require('./favicons.min')
@@ -16,6 +16,15 @@ const favicons  	= require('./favicons.min')
 
 
 module.exports.menuApp = function () {
+	
+	let store
+	try {
+		store = new Store()
+	} catch(e) {
+		store = { get: () => null }
+	}
+	
+	const name 			= 'Nextcloud Bookmark Manager'
 	
 	const i18n = require('./i18n.min')
 	
@@ -33,8 +42,37 @@ module.exports.menuApp = function () {
 				{
 					label: i18n.t('menu:app.login', 'Log in/out to Nextcloud…'),
 					accelerator: 'Command+Ctrl+Alt+l',
-					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('open-login', 'open-login') }
-				
+					click (item, focusedWindow) {
+						
+						if( focusedWindow ) {
+							
+							// Use executeJavaScript instead of webContents.send (broken in Electron v34 with contextIsolation: false)
+							const loginUrl = 'file://' + path.join(__dirname, '../html/login.html')
+							
+							focusedWindow.webContents.executeJavaScript(`
+								(function() {
+									try {
+										const mw = require('../js/modal.min');
+										mw.openModal('${loginUrl}', 480, 180, false);
+										return 'open-modal called';
+									} catch(e) {
+										try {
+											require('electron').ipcRenderer.send('error-in-render', {
+												error: 'ej-openModal: ' + e.message + ' stack: ' + e.stack,
+												url: 'menu-app.js',
+												line: 0
+											});
+										} catch(e2) {}
+										return 'error: ' + e.message;
+									}
+								})()
+							`).then((result) => {
+								// open-login executed
+							}).catch((err) => {
+								// login modal failed to open
+							})
+						}
+					}
 				},
 				{
 					type: 'separator'
@@ -88,6 +126,11 @@ module.exports.menuApp = function () {
 					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('delete-bookmark', 'delete-bookmark') }
 				},
 				{
+					label: i18n.t('menu:bookmarks.deleteselected', 'Delete Selected Bookmarks…'),
+					accelerator: 'Command+Shift+D',
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('delete-selected-bookmarks', 'delete-selected-bookmarks') }
+				},
+				{
 					type: 'separator'
 				},
 				{
@@ -111,9 +154,68 @@ module.exports.menuApp = function () {
 					type: 'separator'
 				},
 				{
+					label: i18n.t('menu:bookmarks.broken', 'Check Broken Links…'),
+					accelerator: 'Command+Shift+B',
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('check-broken-links', 'check-broken-links') }
+				},
+				{
+					type: 'separator'
+				},
+				{
+					label: i18n.t('menu:bookmarks.import', 'Import Bookmarks File…'),
+					accelerator: 'Command+Alt+I',
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('import-bookmarks', 'import-bookmarks') }
+				},
+				{
 					label: i18n.t('menu:bookmarks.export', 'Export Bookmarks File…'),
 					accelerator: 'Command+Alt+E',
 					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('export-bookmarks', 'export-bookmarks') }
+				},
+				{
+					label: i18n.t('menu:bookmarks.exportaz', 'Export Bookmarks File (A–Z)…'),
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('export-bookmarks-az', 'export-bookmarks-az') }
+				},
+				{
+					type: 'separator'
+				},
+				{
+					label: i18n.t('menu:bookmarks.selectall', 'Select All'),
+					accelerator: 'Command+Shift+A',
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('select-all-bookmarks', 'select-all') }
+				},
+				{
+					label: i18n.t('menu:bookmarks.deselectall', 'Deselect All'),
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('deselect-all-bookmarks', 'deselect-all') }
+				},
+				{
+					type: 'separator'
+				},
+				{
+					type: 'separator'
+				},
+				{
+					label: i18n.t('menu:bookmarks.autotag', 'Auto-Tag Bookmarks…'),
+					accelerator: 'Command+Alt+T',
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('auto-tag-bookmarks', 'auto-tag-bookmarks') }
+				},
+				{
+					label: i18n.t('menu:bookmarks.autoorg', 'Auto-Organize Bookmarks…'),
+					accelerator: 'Command+Alt+O',
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('auto-organize-bookmarks', 'auto-organize-bookmarks') }
+				},
+				{
+					label: i18n.t('menu:bookmarks.learn', 'Learn Folder Structure…'),
+					accelerator: 'Command+Alt+L',
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('learn-folder-structure', 'learn-folder-structure') }
+				},
+				{
+					label: i18n.t('menu:bookmarks.repairtitles', 'Repair Titles…'),
+					accelerator: 'Command+Alt+R',
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('repair-titles-bookmarks', 'repair-titles-bookmarks') }
+				},
+				{
+					label: i18n.t('menu:bookmarks.ai', 'AI Settings…'),
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('open-ai-config', 'open-ai-config') }
 				}
 			]  
 		},
@@ -184,6 +286,15 @@ module.exports.menuApp = function () {
 				},
 				{
 					role: 'togglefullscreen'
+				},
+				{
+					type: 'separator'
+				},
+				{
+					type: 'checkbox',
+					label: i18n.t('menu:view.sortalpha', 'Sort Bookmarks A–Z'),
+					checked: !!store.get('sortBookmarksAZ'),
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('sort-alpha-toggle', item.checked) }
 				}
 			]
 		},

@@ -10,9 +10,29 @@
 </head>
 
 <body>
+	<!--note(dgmid): degraded (read-only) banner — shown when the server rejects our session -->
+	<div id="degraded-banner">
+		<span class="degraded-icon">⚠</span>
+		<span class="degraded-text"></span>
+		<button id="degraded-export" class="ui-button small" type="button" data-i18n="app:degraded.export">Export copy…</button>
+		<button id="degraded-retry" class="ui-button small" type="button" data-i18n="app:degraded.retry">Retry connection</button>
+	</div>
 	<main>
+		<div id="main-top">
+			<div id="folder-strip"></div>
+			<button id="view-toggle" class="ui-button small" type="button" title="Toggle view">
+				<span id="view-toggle-text">Cards</span>
+			</button>
+		</div>
 		<table id="bookmarks" class="stripe hover compact order-column responsive nowrap">
 		</table>
+		<div id="bookmark-grid"></div>
+		
+		<!--note(dgmid): subtle sync indicator — visible while a background reconciliation runs -->
+		<div id="sync-indicator">
+			<span class="sync-spinner"></span>
+			<span class="sync-text" data-i18n="app:sync.syncing">Syncing…</span>
+		</div>
 	</main>
 	
 	<aside>
@@ -44,12 +64,17 @@
 					</dl>
 					
 					<div class="sidebar-scroll">
-						<dl id="folderlist" class="folderlist"></dl>
+						<div id="folderlist" class="folderlist"></div>
 					</div>
 				</nav>
 				
 				<nav id="sidebar-tags">
 					<span class="list-title" data-i18n="app:sidebar.title.tags">Tags</span>
+					<div id="tag-toolbar">
+						<button id="tag-mode-and" class="tag-mode active" data-i18n="app:tagtoolbar.and">AND</button>
+						<button id="tag-mode-or" class="tag-mode" data-i18n="app:tagtoolbar.or">OR</button>
+						<button id="tag-clear" class="tag-clear" data-i18n="app:tagtoolbar.clear">Clear tags</button>
+					</div>
 					<dl id="taglist-extras" class="taglist"></dl>
 					<div class="sidebar-scroll">
 						<dl id="taglist" class="taglist"></dl>
@@ -59,6 +84,7 @@
 			
 			<dl id="column-list">
 				<dt data-i18n="app:sidebar.title.columns">Columns</dt>
+				<dd><label><input id="favicon" class="col-toggle" type="checkbox" data-column="favicon" /> <span data-i18n="app:sidebar.filter.favicon">Favicon</span></label></dd>
 				<dd><label><input id="description" class="col-toggle" type="checkbox" data-column="3" /> <span data-i18n="app:sidebar.filter.description">Description</span></label></dd>
 				<dd><label><input id="url" class="col-toggle" type="checkbox" data-column="4" /> <span data-i18n="app:sidebar.filter.url">Url</span></label></dd>
 				<dd><label><input id="created" class="col-toggle" type="checkbox" data-column="6" /> <span data-i18n="app:sidebar.filter.created">Created</span></label></dd>

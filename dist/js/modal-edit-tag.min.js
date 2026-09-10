@@ -2,9 +2,15 @@
 
 const i18n 			= require( './i18n.min' )
 
-const remote 		= require( 'electron' ).remote
+// Polyfill: make electron-store work in renderer
+try {
+	const electron = require( 'electron' )
+	const remote = require( '@electron/remote' )
+	if( !electron.app ) electron.app = remote.app
+} catch( e ) {}
+
 const ipc 			= require( 'electron' ).ipcRenderer
-const dialog 		= remote.dialog
+
 const Store 		= require( 'electron-store' )
 const store 		= new Store()
 const Mousetrap 	= require( 'mousetrap' )
@@ -65,8 +71,7 @@ function populateForm() {
 
 function closeModal() {
 	
-	const modal = remote.getCurrentWindow()
-	modal.close()
+	ipc.send( 'close-current-window' )
 }
 
 

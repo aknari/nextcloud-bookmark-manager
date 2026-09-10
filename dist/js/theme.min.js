@@ -4,9 +4,9 @@ window.__setTheme = () => {
 	let userTheme 		= localStorage.user_theme,
 		OSTheme 		= localStorage.os_theme,
 		defaultTheme 	= 'light',
-		accent			= localStorage.accent,
-		accent_light	= localStorage.accent_light,
-		accent_dark		= localStorage.accent_dark
+		accent			= localStorage.accent || '#0082c9',
+		accent_light	= localStorage.accent_light || '#66b3db',
+		accent_dark		= localStorage.accent_dark || '#006399'
 	
 	
 	document.documentElement.setAttribute(

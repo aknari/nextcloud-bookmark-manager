@@ -2,9 +2,14 @@
 
 const i18n 			= require( './i18n.min' )
 
-const remote 		= require( 'electron' ).remote
-const ipc 			= require( 'electron' ).ipcRenderer
-const dialog 		= remote.dialog
+// Polyfill: make electron-store work in renderer
+try {
+	const electron = require( 'electron' )
+	const remote = require( '@electron/remote' )
+	if( !electron.app ) electron.app = remote.app
+} catch( e ) {}
+
+const { ipcRenderer: ipc } = require( 'electron' )
 
 const Store 		= require( 'electron-store' )
 const store 		= new Store()
@@ -19,15 +24,11 @@ require('select2')($)
 const fetch			= require( './fetch.min' )
 const serialize		= require( './serialize.min' )
 const entities		= require( './entities.min' )
+const folderList	= require( './folder-list.min' )
 
-let folders 		= store.get( 'folders' ).reverse(),
-	urlParams 		= new URLSearchParams( location.search ),
-	theId 			= urlParams.get('id')
-
-folders.unshift({
-	"id": -1,
-	"text": i18n.t( 'editbookmark:select.option.home', 'Home' )
-})
+let urlParams 		= new URLSearchParams( location.search ),
+	theId 			= urlParams.get('id'),
+	tree 			= folderList.buildHierarchyList( store.get( 'folders' ) )
 
 
 
@@ -35,7 +36,7 @@ folders.unshift({
 
 window.onerror = function( error, url, line ) {
 	
-	ipcRenderer.send( 'error-in-render', {error, url, line} )
+	ipc.send( 'error-in-render', {error, url, line} )
 }
 
 
@@ -68,14 +69,18 @@ function populateForm( bookmark ) {
 		$('#folders').val( '-1' )
 	}
 	
-	for( let folder of folders ) {
+	//note(dgmid): Home first, then the rest indented as a tree
+	
+	$('#folders').append( `<option value="-1" data-depth="0">${i18n.t( 'editbookmark:select.option.home', 'Home' )}</option>` )
+	
+	for( let node of tree ) {
 		
 		let selected = ''
-		if( bookmark['item']['folders'].includes( folder.id ) ) {
+		if( bookmark['item']['folders'].includes( node.id ) ) {
 			
 			selected = ' selected'
 		}
-		$('#folders').append( `<option value="${folder.id}"${selected}>${folder.text}</option>` )
+		$('#folders').append( `<option value="${node.id}"${selected} data-depth="${node.depth}">${node.text}</option>` )
 	}
 	
 	$('header').append( entities.encode( bookmark['item']['title'] ) )
@@ -108,8 +113,7 @@ function populateForm( bookmark ) {
 
 function closeModal() {
 	
-	const modal = remote.getCurrentWindow()
-	modal.close()
+	ipc.send( 'close-current-window' )
 }
 
 
@@ -121,6 +125,15 @@ $(document).ready(function() {
 		width: '320px',
 		language: {
 			noResults:function() { return i18n.t( 'editbookmark:select.noresults', 'No results found' ) }
+		},
+		//note(dgmid): indent folder options by depth so the dropdown reads as a tree
+		templateResult: function( data ) {
+			
+			if( !data.element ) return data.text
+			
+			let depth = parseInt( $(data.element).data('depth') || 0, 10 )
+			
+			return $(`<span style="padding-left:${depth * 14}px">${data.text}</span>`)
 		}
 	})
 	
@@ -177,9 +190,47 @@ $(document).ready(function() {
 			data += '&folders[]=' + encodeURIComponent(folder['id'])
 		}
 		
-		fetch.bookmarksApi( 'modify', theId, data, function() {
+		fetch.bookmarksApi( 'modify', theId, data, function( response ) {
 			
-			ipc.send('refresh', 'refresh')
+			//note(dgmid): capture the server-assigned lastmodified so the Modified column
+			//can refresh instantly. The PUT response is the updated bookmark; if parsing
+			//fails (or the field is missing) fall back to "now" — the server just touched it.
+			
+			let lastmodified = Math.floor( Date.now() / 1000 )
+			
+			if( response ) {
+				
+				try {
+					
+					let doc = JSON.parse( response )
+					
+					if( doc && doc.item && doc.item.lastmodified ) {
+						
+						lastmodified = parseInt( doc.item.lastmodified, 10 )
+						
+					} else if( doc && doc.lastmodified ) {
+						
+						lastmodified = parseInt( doc.lastmodified, 10 )
+					}
+					
+				} catch( e ) {}
+			}
+			
+			//note(dgmid): pass the edited bookmark back through IPC so the main window
+			//can update that single row instantly instead of re-downloading all bookmarks
+			ipc.send( 'refresh', {
+				action: 'edit-bookmark',
+				data: {
+					id: parseInt( theId, 10 ),
+					url: $('input[name="url"]').val(),
+					title: $('input[name="title"]').val(),
+					description: $('textarea[name="description"]').val(),
+					tags: selectedTags.map( t => t['text'] ),
+					folders: selectedFolders.map( f => parseInt( f['id'], 10 ) ),
+					lastmodified: lastmodified
+				}
+			})
+			
 			closeModal()
 		})
 	})

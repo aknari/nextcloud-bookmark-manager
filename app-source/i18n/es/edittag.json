@@ -1,0 +1,13 @@
+{
+  "header": "Editar etiqueta:",
+  "label": {
+    "newname": "nuevo nombre"
+  },
+  "input": {
+    "required": "este campo es obligatorio"
+  },
+  "button": {
+    "cancel": "Cancelar",
+    "submit": "Actualizar"
+  }
+}

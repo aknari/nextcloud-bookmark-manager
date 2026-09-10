@@ -5,6 +5,7 @@
     "copy": "Copy {{- title}} url to Clipboard",
     "edit": "Edit {{- title}} Bookmark…",
     "delete": "Delete {{- title}} Bookmark…",
+    "deleteselected": "Delete {{count}} Selected Bookmarks…",
     "addtofolder": "Add to Folder…",
     "removefromfolder": "Remove from Folder…",
     "home": "Home",

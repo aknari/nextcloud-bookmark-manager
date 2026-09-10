@@ -1,0 +1,13 @@
+{
+  "opendialog": {
+    "button": "Importar Marcadores"
+  },
+  "errorbox": {
+    "title": "Error de Importación",
+    "nobookmarks": "No se encontraron marcadores en el archivo seleccionado.",
+    "readfile": "Se produjo un error al leer el archivo:\n{{- filepath}}"
+  },
+  "notification": {
+    "body": "{{count}} marcadores importados desde:\n{{- name}}"
+  }
+}

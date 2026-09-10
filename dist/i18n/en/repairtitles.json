@@ -1,0 +1,57 @@
+{
+  "header": "Repair Titles",
+  "label": {
+    "scope": "Scope",
+    "what": "Repairs titles and descriptions corrupted by a bad encoding (mojibake): first locally with a deterministic re-decode, then by fetching the real title from the page when needed.",
+    "fill_desc": "Fill empty descriptions from the page"
+  },
+  "hint": {
+    "fill_desc": "For bookmarks without a description, fetch the page's meta description. Many web requests — can take a while."
+  },
+  "scope": {
+    "selected": "Only selected bookmarks",
+    "all": "All bookmarks"
+  },
+  "field": {
+    "title": "Title",
+    "description": "Description"
+  },
+  "progress": {
+    "fetch": "Fetching titles and descriptions from the web… {{current}} of {{total}}",
+    "apply": "Applying {{current}} of {{total}}"
+  },
+  "summary": {
+    "recovered": "{{recovered}} of {{total}} bookmarks recovered ({{local}} local, {{web}} web, {{both}} both).",
+    "unrecoverable": "{{count}} could not be recovered.",
+    "skipped": "{{count}} could not be completed (the page did not provide the missing information).",
+    "none": "No corrupted titles or descriptions found in the selected scope.",
+    "approx": "{{count}} repaired approximately (best-effort decode — review them before applying)."
+  },
+  "badge": {
+    "local": "local",
+    "web": "web",
+    "both": "local + web",
+    "approx": "approx"
+  },
+  "unrecoverable": "could not recover",
+  "button": {
+    "start": "Scan",
+    "apply": "Apply to Server",
+    "applying": "Applying…",
+    "close": "Close"
+  },
+  "error": {
+    "noapply_title": "No Changes to Apply",
+    "noapply_content": "No recovered changes are accepted. Toggle items or run the scan again."
+  },
+  "done": {
+    "applied": "Updated {{applied}} bookmarks.",
+    "failed": "{{failed}} failed.",
+    "title": "Repair Titles Complete"
+  },
+  "status": {
+    "scanned": "Scan complete — {{total}} checked, {{recovered}} recovered. You can scan again.",
+    "none": "Scan complete — nothing corrupted found in the selected scope.",
+    "applied": "Changes applied to the server ({{count}} bookmarks)."
+  }
+}

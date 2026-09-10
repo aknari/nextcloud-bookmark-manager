@@ -1,0 +1,26 @@
+{
+  "bookmarks": {
+    "open": "Abrir {{- title}} en el navegador predeterminado",
+    "with": "Abrir {{- title}} con…",
+    "copy": "Copiar la url de {{- title}} al portapapeles",
+    "edit": "Editar el marcador {{- title}}…",
+    "delete": "Eliminar el marcador {{- title}}…",
+    "deleteselected": "Eliminar {{count}} marcadores seleccionados…",
+    "addtofolder": "Añadir a la carpeta…",
+    "removefromfolder": "Quitar de la carpeta…",
+    "home": "Inicio",
+    "info": "Mostrar / Ocultar información…"
+  },
+  "columns": {
+    "description": "Descripción",
+    "url": "Url",
+    "created": "Creado",
+    "modified": "Modificado",
+    "folders": "Carpetas",
+    "tags": "Etiquetas"
+  },
+  "panels": {
+    "open": "Abrir todos",
+    "close": "Cerrar todos"
+  }
+}

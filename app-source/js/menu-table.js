@@ -25,13 +25,19 @@ module.exports.menuBookmarks = function ( winId ) {
 	
 	ipcMain.on('show-bookmark-menu', ( event, message ) => {
 		
-		let id 		= message[0],
-			title 	= entities.decode(message[2])
+		let rowData 		= message.row,
+			selectedCount	= message.selectedCount || 1,
+			id 				= rowData[0],
+			title 			= entities.decode(rowData[2])
+		
+		// Use direct references for folder submenus to avoid hardcoded index issues
+		let addFolderSubmenu = [],
+			removeFolderSubmenu = []
 		
 		const bookmarkMenuTemplate = [
 			{
 				label: i18n.t('menutable:bookmarks.open', 'Open {{- title}} in Default Browser', { title: title }),
-				click () { require('electron').shell.openExternal( message[4] ) }
+				click () { require('electron').shell.openExternal( rowData[4] ) }
 			},
 			{
 				label: i18n.t('menutable:bookmarks.with', 'Open {{- title}} with…', { title: title }),
@@ -39,29 +45,34 @@ module.exports.menuBookmarks = function ( winId ) {
 			},
 			{
 				label: i18n.t('menutable:bookmarks.copy', 'Copy {{- title}} url to Clipboard', { title: title }),
-				click () { clipboard.writeText(message[4], title) }	
+				click () { clipboard.writeText(rowData[4], title) }	
 			},
 			{
 				type: 'separator'
 			},
 			{
 				label: i18n.t('menutable:bookmarks.edit', 'Edit {{- title}} Bookmark…', { title: title }),
-				click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('edit-bookmark', message) }
+				click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('edit-bookmark', rowData) }
 			},
 			{
 				label: i18n.t('menutable:bookmarks.delete', 'Delete {{- title}} Bookmark…', { title: title }),
 				click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('delete-bookmark', [id, title]) }
 			},
+			// If multiple bookmarks are selected, add a bulk delete option
+			...( selectedCount > 1 ? [{
+				label: i18n.t('menutable:bookmarks.deleteselected', 'Delete {{count}} Selected Bookmarks…', { count: selectedCount }),
+				click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('delete-selected-bookmarks', '') }
+			}] : [] ),
 			{
 				type: 'separator'
 			},
 			{
 				label: i18n.t('menutable:bookmarks.addtofolder', 'Add to Folder…'),
-				submenu: []
+				submenu: addFolderSubmenu  // use direct reference
 			},
 			{
 				label: i18n.t('menutable:bookmarks.removefromfolder', 'Remove from Folder…'),
-				submenu: []
+				submenu: removeFolderSubmenu  // use direct reference
 			},
 			{
 				type: 'separator'
@@ -80,17 +91,17 @@ module.exports.menuBookmarks = function ( winId ) {
 				label: browser.browser,
 				click () {
 					
-					detectBrowsers.launchBrowser( browser, message[4] )
+					detectBrowsers.launchBrowser( browser, rowData[4] )
 				}
 			})
 		}
 		
 		const 	folders 	= store.get( 'folders' ),
-				folderIds 	= message[9].split( ',' ).map( Number )
+				folderIds 	= rowData[9].split( ',' ).map( Number )
 		
 		if( !folderIds.includes( -1 ) ) {
 			
-			bookmarkMenuTemplate[7].submenu.push(
+			addFolderSubmenu.push(
 				{
 					label: i18n.t('menutable:bookmarks.home', 'Home'),
 					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('move-bookmark',
@@ -109,7 +120,7 @@ module.exports.menuBookmarks = function ( winId ) {
 		
 		} else {
 			
-			bookmarkMenuTemplate[8].submenu.push(
+			removeFolderSubmenu.push(
 				{
 					label: i18n.t('menutable:bookmarks.home', 'Home'),
 					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('move-bookmark',
@@ -131,7 +142,7 @@ module.exports.menuBookmarks = function ( winId ) {
 		
 			if( !folderIds.includes( folder.id )  ) {
 		
-				bookmarkMenuTemplate[7].submenu.push({
+				addFolderSubmenu.push({
 					
 					label: folder.text,
 					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('move-bookmark',
@@ -146,7 +157,7 @@ module.exports.menuBookmarks = function ( winId ) {
 			
 			} else {
 				
-				bookmarkMenuTemplate[8].submenu.push({
+				removeFolderSubmenu.push({
 					
 					label: folder.text,
 					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('move-bookmark',

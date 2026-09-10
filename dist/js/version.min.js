@@ -2,7 +2,7 @@
 
 const i18n 				= require( './i18n.min' )
 
-const version 			= require('electron').remote.app.getVersion()
+const version 			= require('electron').ipcRenderer.sendSync('get-version')
 const compareVersions	= require('compare-versions')
 const $					= require( 'jquery' )
 const log				= require( 'electron-log' )

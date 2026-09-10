@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="">
+	<head>
+		<meta charset="utf-8" />
+		<title>Nextcloud Bookmark Manager - AI Configuration</title>
+		<script>
+			require( '../js/theme.min' )
+		</script>
+		<link rel="stylesheet" type="text/css" href="../css/modal.min.css" media="all">
+		<style>
+			/* Override the default form layout (horizontal label + input) to use vertical stacking */
+			#ai-config li { margin-bottom: 14px; padding-bottom: 0; }
+			#ai-config label {
+				float: none !important;
+				display: block !important;
+				width: auto !important;
+				text-align: left !important;
+				padding-right: 0 !important;
+				font-size: 12px !important;
+				line-height: 1.4 !important;
+				font-weight: 600;
+				margin-bottom: 4px;
+				color: var(--text);
+			}
+			/* Remove the colon ::after since we show labels above, not beside */
+			#ai-config label::after { content: none !important; }
+			
+			#ai-config input[type="password"],
+			#ai-config input[type="text"],
+			#ai-config input[type="number"],
+			#ai-config select {
+				display: block !important;
+				width: 100% !important;
+				padding: 8px 10px;
+				border: 1px solid var(--tab-dividers);
+				border-radius: 4px;
+				font-size: 13px;
+				background: var(--stripe-even);
+				color: var(--text);
+				box-sizing: border-box;
+				appearance: auto; /* restore native dropdown arrow for clarity */
+			}
+			#ai-config input[type="password"] {
+				font-family: monospace;
+				letter-spacing: 0.1em;
+			}
+			#ai-config select {
+				height: 36px;
+				cursor: pointer;
+			}
+			#ai-config input[type="number"] {
+				width: 120px !important;
+			}
+			#ai-config .hint {
+				font-size: 11px;
+				color: var(--text);
+				opacity: .55;
+				margin-top: 3px;
+				line-height: 1.3;
+			}
+			#ai-config .hidden,
+			#ai-config li.hidden,
+			#ai-config input.hidden,
+			#ai-config select.hidden {
+				display: none !important;
+			}
+			#test-status {
+				min-height: 0;
+				overflow: hidden;
+				transition: all .2s ease;
+			}
+			#test-status.show {
+				margin-top: 12px;
+				padding: 8px 12px;
+				border-radius: 4px;
+				font-size: 12px;
+				line-height: 1.4;
+				word-break: break-word;
+			}
+			#test-status.show.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+			#test-status.show.error   { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+			#test-status.show.pending { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+		</style>
+	</head>
+	
+	<body>
+		<header data-i18n="aiconfig:header">AI Configuration</header>
+		
+		<div class="scroll">
+			<form id="modal-form">
+				<ul id="ai-config">
+					<li>
+						<label for="provider" data-i18n="aiconfig:label.provider">AI Provider</label>
+						<select id="provider" name="provider" tabindex="1">
+							<option value="gemini">Google Gemini (free tier eligible models)</option>
+							<option value="openrouter">OpenRouter (free &amp; paid models, one key)</option>
+							<option value="local">OpenAI-compatible server (local or cloud: GLM / vLLM / Ollama / LM Studio / Groq…)</option>
+						</select>
+						<div class="hint" data-i18n="aiconfig:hint.provider">Each run uses this provider. Gemini stays the default — switch freely, settings are kept per provider.</div>
+					</li>
+					<li id="row-base-url" class="hidden">
+						<label for="base-url" data-i18n="aiconfig:label.baseurl">Server URL</label>
+						<input type="text" id="base-url" name="baseUrl" placeholder="http://127.0.0.1:8000/v1" tabindex="2">
+						<div class="hint" data-i18n="aiconfig:hint.baseurl">Address of the OpenAI-compatible server (your own or a cloud service). Must end with /v1, e.g. http://127.0.0.1:8000/v1 or https://api.groq.com/openai/v1</div>
+					</li>
+					<li id="row-api-key">
+						<label for="api-key" id="api-key-label" data-i18n="aiconfig:label.apikey">Gemini API Key</label>
+						<input type="password" id="api-key" name="apiKey" placeholder="AIzaSy..." tabindex="3">
+						<div class="hint" id="api-key-hint" data-i18n="aiconfig:hint.apikey">Get your free key at ai.google.dev</div>
+					</li>
+					<li id="row-model">
+						<label for="model" id="model-label" data-i18n="aiconfig:label.model">AI Model</label>
+						<select id="model" name="model" tabindex="4">
+							<option value="gemini-3.5-flash">Gemini 3.5 Flash (recommended, free tier)</option>
+							<option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (faster, free tier)</option>
+							<option value="gemini-2.5-flash">Gemini 2.5 Flash (free tier)</option>
+							<option value="gemini-2.5-pro">Gemini 2.5 Pro (billed only)</option>
+						</select>
+						<input type="text" id="model-local" name="modelLocal" class="hidden" placeholder="glm-4.5" list="model-options" tabindex="5">
+						<datalist id="model-options"></datalist>
+						<div class="hint" id="model-hint" data-i18n="aiconfig:hint.model">Flash and Lite models are free-tier eligible. Press Test Connection to load the live list from the provider.</div>
+					</li>
+					<li>
+						<label for="max-tags" data-i18n="aiconfig:label.maxtags">Max Tags per Bookmark</label>
+						<input type="number" id="max-tags" name="maxTags" min="1" max="20" value="8" tabindex="6">
+					</li>
+					<li>
+						<label for="max-per-session" data-i18n="aiconfig:label.maxsession">Max Items per AI Session</label>
+						<input type="number" id="max-per-session" name="maxPerSession" min="1" max="500" value="100" tabindex="7">
+						<div class="hint" data-i18n="aiconfig:hint.maxsession">Limits AI API usage per run (auto-tag, auto-organize)</div>
+					</li>
+					<li>
+						<label for="api-gap" data-i18n="aiconfig:label.apigap">Delay Between AI Calls (ms)</label>
+						<input type="number" id="api-gap" name="apiGapMs" min="0" max="60000" step="100" value="3500" tabindex="8">
+						<div class="hint" data-i18n="aiconfig:hint.apigap">Free tiers allow few requests/minute — keep 3500 ms or more for large runs. Set 0 on a paid plan or a local server.</div>
+					</li>
+					<li style="padding-top:10px;border-top:1px solid var(--tab-dividers);">
+						<label for="profiles-list" data-i18n="aiconfig:label.profiles">Learned Profiles (Folder Structure)</label>
+						<div id="profiles-list" style="margin:6px 0;max-height:150px;overflow-y:auto;"></div>
+						<button id="btn-reset-profiles" class="ui-button" type="button" data-i18n="aiconfig:button.resetprofiles" style="font-size:11px;padding:4px 12px;">Reset Learning</button>
+					</li>
+				</ul>
+				
+				<div id="test-status"></div>
+				
+				<footer>
+					<button id="test-btn" class="ui-button" type="button" data-i18n="aiconfig:button.test" tabindex="9">Test Connection</button>
+					<button id="cancel" class="ui-button" type="button" data-i18n="aiconfig:button.cancel" tabindex="10">Cancel</button>
+					<button id="save" class="ui-button" type="submit" data-i18n="aiconfig:button.save" tabindex="11">Save</button>
+				</footer>
+			</form>
+		</div>
+		
+		<script>
+			require( '../js/modal-ai-config.min' )
+		</script>
+	</body>
+</html>

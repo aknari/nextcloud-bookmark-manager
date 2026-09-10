@@ -1,0 +1,3935 @@
+'use strict'
+
+const i18n = require( './i18n.min' )
+
+// Polyfill: make electron-store work in renderer
+try {
+	const electron = require( 'electron' )
+	const remote = require( '@electron/remote' )
+	if( !electron.app ) electron.app = remote.app
+} catch( e ) {}
+
+const { ipcRenderer } = require( 'electron' )
+
+const Store = require( 'electron-store' )
+let store
+try {
+	store = new Store()
+} catch( e ) {
+	store = { get: () => null, set: () => {} }
+}
+
+const $ = require( 'jquery' )
+const jqueryI18next = require( 'jquery-i18next' )
+const log = require( 'electron-log' )
+const fetchApi = require( './fetch.min' )
+const serialize = require( './serialize.min' )
+const defaultProfile = require( './ai-default-profile.min' )
+const aiClient = require( './ai-client.min' )
+
+jqueryI18next.init(i18n, $)
+
+//note(dgmid): make sure the built-in Default profile is always present
+
+defaultProfile.ensureDefaultProfile( store )
+
+
+
+//note(dgmid): log exceptions
+
+window.onerror = function( error, url, line ) {
+	
+	ipcRenderer.send( 'error-in-render', {error, url, line} )
+}
+
+
+
+//note(dgmid): set lang & localize strings
+
+$('html').attr('lang', i18n.language)
+$('header').localize()
+$('.section-title').localize()
+$('.hint').localize()
+$('label').localize()
+$('button').localize()
+
+
+
+//note(dgmid): state
+
+let context 			= null,		// { folderId, folderName, bookmarks: [{id,title,url,folders}] } passed by main window
+	moves 				= [],		// { id, title, url, folderName, folderPath, folderId, isNew, accepted }
+	processing 			= false,
+	applying 			= false,
+	cancelled 			= false,
+	quotaBlocked 		= false,	// true once the API quota stops the run (daily limit or retries exhausted)
+	quotaTimer 			= null,		// live countdown timer for the per-minute quota banner
+	quotaDeadModels 	= {},		// models whose quota ran out this session — skipped on later batches
+	workingBookmarks 	= [],		// bookmarks after the direct/recursive filter
+	sessionCap 			= 100,		// effective AI session cap (config value, possibly overridden for this run)
+	apiCallCount 		= 0,			// Gemini calls made this run (shown in the results summary)
+	rebalancedMechanical = 0,		// folders balanced by the no-AI (by-domain) fallback
+	excludedGuideCount 	= 0			// existing folders excluded from the reuse guide (junk / oversized)
+
+
+
+//note(dgmid): fallback models to try when the primary model is overloaded
+
+const FALLBACK_MODELS = [
+	'gemini-3.5-flash-lite',
+	'gemini-3.1-flash-lite',
+	'gemini-2.5-flash',
+	'gemini-3.5-flash'
+]
+
+//note(dgmid): models Google has retired - never sent to the API, and when the saved
+//config still names one the run silently substitutes the listed replacement instead of
+//poisoning every batch with an HTTP 400 ("...is no longer available to new users...").
+const RETIRED_MODELS = [ 'gemini-2.5-flash-lite' ]
+
+const MODEL_REPLACEMENTS = {
+	'gemini-2.5-flash-lite': 'gemini-3.5-flash-lite'
+}
+
+const DEFAULT_MODEL = 'gemini-2.5-flash'
+
+let unavailableModels = {}	// models found retired / not-found at runtime this session - skipped later
+
+
+
+//note(dgmid): is this a MODEL-AVAILABILITY error? When Google retires a model (or the
+//configured name is wrong), every call fails with an HTTP 400 - retrying the same model
+//is pointless; the run must skip to the next one and blacklist it for the session.
+
+function isModelUnavailable( message ) {
+	
+	let m = (message || '').toLowerCase()
+	
+	return m.includes( 'no longer available' ) ||
+	       m.includes( 'model not found' ) ||
+	       m.includes( 'is not available' ) ||
+	       m.includes( 'not found for api version' ) ||
+	       m.includes( 'does not exist' ) ||
+	       ( m.includes( 'models/' ) && m.includes( '404' ) )
+}
+
+
+
+//note(dgmid): the model to actually send - the configured one, unless Google retired it
+//(then Google's suggested replacement is used instead, and the user is told once).
+
+function resolvePrimaryModel( configured ) {
+	
+	let model = configured || DEFAULT_MODEL
+	
+	if( RETIRED_MODELS.includes( model ) ) {
+		
+		let replacement = MODEL_REPLACEMENTS[ model ]
+		
+		log.warn( `saved model ${model} has been retired by Google - using ${replacement} instead` )
+		
+		return replacement
+	}
+	
+	return model
+}
+
+
+
+//note(dgmid): ordered list of models to try for one call - the primary first, then the
+//fallbacks, minus anything retired or already known to be unavailable this session.
+
+function buildModelsToTry( primaryModel ) {
+	
+	//note(dgmid): only Gemini has a multi-model free fallback chain. OpenRouter and
+	//local servers use their single configured model — sending Gemini fallback names
+	//to another provider's endpoint would fail every call.
+	if( aiClient.normalizeConfig( store.get( 'aiConfig' ) || {} ).provider !== 'gemini' ) {
+		
+		return [ primaryModel ]
+	}
+	
+	let list = [ primaryModel ]
+	
+	for( let fb of FALLBACK_MODELS ) {
+		
+		if( fb !== primaryModel && !RETIRED_MODELS.includes( fb ) && !unavailableModels[ fb ] ) {
+			
+			list.push( fb )
+		}
+	}
+	
+	return list
+}
+
+
+
+//note(dgmid): hard cap on how deep a "Parent/Child/Grandchild" path may go from the
+//target folder. The AI is told about it in the prompt AND paths are trimmed here, so
+//a runaway proposal can never create a 10-level hierarchy.
+
+const MAX_NESTING_DEPTH = 3
+
+//note(dgmid): how many items a folder may exceed the configured limit by before the
+//rebalance passes act. Kept at ZERO on purpose: the user's "Max items per folder"
+//setting is a hard cap, not a soft target — a folder never keeps more than the limit.
+
+function getTolerance( maxPerFolder ) {
+	
+	return 0
+}
+
+
+
+//note(dgmid): direct children of a folder (roots when folderId === -1)
+
+function getChildren( folders, parentId ) {
+	
+	let isRoot = ( parentId === -1 )
+	
+	return folders.filter( f => {
+		
+		let parent = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+		
+		return isRoot ? ( parent === -1 ) : ( parent === parentId )
+	})
+}
+
+
+
+//note(dgmid): load context + config and check selection
+
+function loadConfig() {
+	
+	let config = store.get( 'aiConfig' ) || {}
+	
+	context = store.get( '_autoOrganizeContext' )
+	
+	let problem = aiClient.configProblem( aiClient.normalizeConfig( config ) )
+	
+	if( problem ) {
+		
+		$('#cfg-errors').html(
+			i18n.t( 'autoorg:error.' + problem.code, problem.message )
+		).show()
+		
+		$('#btn-start').prop('disabled', true)
+		return null
+	}
+	
+	$('#cfg-model').text( resolvePrimaryModel( config.model ) )
+	
+	let folderName 	= ( context && context.folderName ) ? context.folderName : i18n.t('autoorg:label.home', 'Home')
+	
+	$('#cfg-folder').text( folderName )
+	
+	refreshCount()
+	
+	return config
+}
+
+loadConfig()
+
+
+
+//note(dgmid): ids of every folder under parentId (recursive) — used by the
+//"include bookmarks in subfolders" option
+
+function getDescendantIds( folders, parentId ) {
+	
+	let result 	= [],
+		queue 	= [ parentId ]
+	
+	while( queue.length ) {
+		
+		let pid = queue.shift()
+		
+		for( let f of folders ) {
+			
+			let parent = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+			
+			if( parent === pid && !result.includes( f.id ) ) {
+				
+				result.push( f.id )
+				queue.push( f.id )
+			}
+		}
+	}
+	
+	return result
+}
+
+
+
+//note(dgmid): describe the DESTINATION's existing structure ("A", "A/B", "A/B/C") with
+//bookmark counts and up to 3 sample titles per folder, so the AI can deduce the
+//organizing criterion and fit the incoming bookmarks into it. List capped later.
+
+function buildDestinationGuide( folders, parentId, bookmarks, maxDepth ) {
+	
+	let guides = []
+	
+	function walk( pid, prefix, depth ) {
+		
+		if( depth > maxDepth ) return
+		
+		for( let c of getChildren( folders, pid ) ) {
+			
+			let path = prefix ? prefix + '/' + c.text : c.text
+			
+			let items = ( bookmarks || [] ).filter( b => ( b.folders || [] ).includes( c.id ) )
+			
+			let samples = items.slice( 0, 3 ).map( b => String( b.title || '' ).substring( 0, 40 ) ).filter( Boolean )
+			
+			guides.push( { path: path, count: items.length, samples: samples } )
+			walk( c.id, path, depth + 1 )
+		}
+	}
+	
+	walk( parentId, '', 1 )
+	
+	return guides
+}
+
+
+
+//note(dgmid): recompute the working bookmark set (direct vs. recursive) and the
+//session-cap notice whenever the include-subfolders option or the override changes
+
+function refreshCount() {
+	
+	let recursive 	= $( '#chk-include-subfolders' ).is( ':checked' ),
+		allBookmarks = ( context && context.bookmarks ) ? context.bookmarks : [],
+		fid 		= ( context && context.folderId != null ) ? context.folderId : -1,
+		folders 	= store.get( 'folders' ) || []
+	
+	if( recursive ) {
+		
+		let ids = new Set( getDescendantIds( folders, fid ) )
+		
+		ids.add( fid )
+		
+		workingBookmarks = allBookmarks.filter( b => ( b.folders || [] ).some( f => ids.has( f ) ) )
+		
+	} else {
+		
+		workingBookmarks = allBookmarks.filter( b => ( b.folders || [] ).includes( fid ) )
+	}
+	
+	//note(dgmid): when reorganizing into a different destination, leave bookmarks that
+	//are already inside the destination (or its subfolders) alone — they're organized.
+	//Skip the exclusion when the destination is the source itself or an ancestor of it
+	//(e.g. moving up to Home): there the source scope lives INSIDE the destination
+	//subtree, so excluding it would wipe out the whole working set.
+	let dest = getDestId()
+	
+	if( dest !== fid && !isFolderAncestor( folders, dest, fid ) ) {
+		
+		let destIds = new Set( getDescendantIds( folders, dest ) )
+		
+		destIds.add( dest )
+		
+		workingBookmarks = workingBookmarks.filter( b => !( b.folders || [] ).some( f => destIds.has( f ) ) )
+	}
+	
+	//note(dgmid): 🔍 DIAGNOSTIC — how big is the working scope, and why?
+	log.info( `[auto-organize] scope → folder=${fid} recursive=${recursive} inContext=${allBookmarks.length} working=${workingBookmarks.length} dest=${dest}` )
+	
+	let maxSession = ( store.get( 'aiConfig' ) || {} ).maxPerSession || 100
+	sessionCap = maxSession
+	
+	if( workingBookmarks.length === 0 ) {
+		
+		$('#cfg-count').html(
+			'<span style="color:#856404;">' +
+			i18n.t('autoorg:label.nobookmarks', 'No bookmarks found in this folder — select a folder first') +
+			'</span>'
+		)
+		$('#btn-start').prop('disabled', true)
+		$('#cap-notice').hide()
+		
+	} else {
+		
+		$('#cfg-count').text( workingBookmarks.length )
+		$('#btn-start').prop('disabled', false)
+		
+		if( workingBookmarks.length > maxSession ) {
+			
+			$('#cap-text').html(
+				i18n.t('autoorg:label.capnotice', 'This run will process only <strong>{{cap}}</strong> of <strong>{{total}}</strong> bookmarks (AI session cap).', {
+					cap: maxSession,
+					total: workingBookmarks.length
+				})
+			)
+			$('#chk-override-cap').prop( 'checked', false )
+			$('#cap-notice').show()
+			
+		} else {
+			
+			$('#cap-notice').hide()
+		}
+	}
+}
+
+
+
+//note(dgmid): populate the optional profile selector from the learned profiles store
+
+function populateProfiles() {
+	
+	//note(dgmid): the built-in Default profile is always first (never deletable)
+	let profiles = defaultProfile.ensureDefaultProfile( store )
+	
+	$('#profile-select').empty()
+	
+	for( let p of profiles ) {
+		
+		let label = defaultProfile.isBuiltin( p )
+			? i18n.t('autoorg:label.defaultprofile', 'Default (built-in)')
+			: p.name
+		
+		$('#profile-select').append( $( '<option>', {
+			value: p.id,
+			text: label
+		}))
+	}
+	
+	//note(dgmid): pre-select the Default profile
+	if( $('#profile-select').find( 'option' ).length > 0 && !$('#profile-select').val() ) {
+		$('#profile-select').val( 'default' )
+	}
+}
+
+populateProfiles()
+
+
+
+//note(dgmid): destination folder — where the reorganized structure will be created.
+//Defaults to the source folder (identical to the old behaviour). When a different
+//destination is picked, its existing structure can be used as a guide and bookmarks
+//already inside it are left alone.
+
+function getDestId() {
+	
+	let v = $( '#dest-folder' ).val()
+	
+	if( v === 'same' || v == null ) return ( context && context.folderId != null ) ? context.folderId : -1
+	
+	return parseInt( v, 10 )
+}
+
+//note(dgmid): is `ancestorId` an ancestor of `nodeId` in the folder tree?
+//Home (-1) is the root and counts as an ancestor of everything.
+
+function isFolderAncestor( folders, ancestorId, nodeId ) {
+	
+	if( ancestorId === -1 ) return true
+	
+	let seen = new Set(),
+		cur 	= nodeId
+	
+	while( cur != null && cur !== -1 && !seen.has( cur ) ) {
+		
+		seen.add( cur )
+		
+		let f = folders.find( x => x.id === cur )
+		
+		if( !f ) return false
+		
+		let parent = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+		
+		if( parent === ancestorId ) return true
+		
+		cur = parent
+	}
+	
+	return false
+}
+
+function populateDestinations() {
+	
+	let folders 	= store.get( 'folders' ) || [],
+		$sel 		= $( '#dest-folder' ).empty(),
+		childrenOf 	= {}
+	
+	for( let f of folders ) {
+		
+		let p = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+		
+		if( !childrenOf[p] ) childrenOf[p] = []
+		childrenOf[p].push( f )
+	}
+	
+	for( let k in childrenOf ) {
+		childrenOf[k].sort( (a,b) => (a.text > b.text) ? 1 : ((b.text > a.text) ? -1 : 0) )
+	}
+	
+	$sel.append( $( '<option>', {
+		value: 'same',
+		text: i18n.t('autoorg:label.same', 'Same as source (current folder)')
+	}))
+	
+	$sel.append( $( '<option>', {
+		value: '-1',
+		text: i18n.t('autoorg:label.home', 'Home')
+	}))
+	
+	function walk( pid, depth ) {
+		
+		for( let c of ( childrenOf[pid] || [] ) ) {
+			
+			$sel.append( $( '<option>', {
+				value: c.id,
+				text: '　'.repeat( depth ) + c.text
+			}))
+			
+			walk( c.id, depth + 1 )
+		}
+	}
+	
+	walk( -1, 1 )
+}
+
+populateDestinations()
+
+
+
+//note(dgmid): shared "consider existing folders/tags" toggle — applies to both
+//Auto-Organize and Auto-Tag. Persisted so the choice carries across modals.
+
+$('#chk-consider-existing').prop( 'checked', store.get( 'aiConsiderExisting' ) !== false )
+
+$('#chk-consider-existing').on( 'change', function() {
+	
+	store.set( 'aiConsiderExisting', $(this).is( ':checked' ) )
+})
+
+
+
+$('#dest-folder').on( 'change', function() {
+	
+	refreshCount()
+})
+
+
+
+//note(dgmid): toggling include-subfolders recomputes the count
+
+$('#chk-include-subfolders').on( 'change', function() {
+	
+	refreshCount()
+})
+
+
+
+//note(dgmid): overriding the session cap applies only to this run (not saved)
+
+$('#chk-override-cap').on( 'change', function() {
+	
+	sessionCap = $(this).is( ':checked' )
+		? workingBookmarks.length
+		: ( ( store.get( 'aiConfig' ) || {} ).maxPerSession || 100 )
+})
+
+
+
+//note(dgmid): show status in progress bar
+
+function setProgress( current, total, label ) {
+	
+	let pct = total > 0 ? Math.round( current / total * 100 ) : 0
+	
+	$('#progress-fill').css( 'width', pct + '%' )
+	$('#progress-text').text( label || `${current} / ${total}` )
+}
+
+
+
+//note(dgmid): check if a Gemini error is a transient server issue (high demand, rate limit, etc.)
+
+//note(dgmid): is this a TRANSIENT error? "Failed to fetch" is a plain network hiccup
+//(see isNetworkError) — both kinds get a retry rather than dropping the batch.
+
+function isTransientError( message ) {
+	
+	let m = (message || '').toLowerCase()
+	
+	return m.includes('high demand') ||
+	       m.includes('rate limit') ||
+	       m.includes('too many requests') ||
+	       m.includes('temporarily') ||
+	       m.includes('quota') ||
+	       m.includes('429') ||
+	       m.includes('resource exhausted') ||
+	       isNetworkError( m )
+}
+
+
+
+//note(dgmid): is this a QUOTA / rate-limit error? These matter specially: the free
+//tier caps each model separately (e.g. ~20 requests/minute), so if ONE model is out
+//of quota the run falls back to the next model in the list — only when EVERY model
+//is blocked does the run stop and wait.
+
+function isQuotaError( message ) {
+	
+	let m = (message || '').toLowerCase()
+	
+	return m.includes( 'quota' ) ||
+	       m.includes( 'rate limit' ) ||
+	       m.includes( 'resource exhausted' ) ||
+	       m.includes( '429' )
+}
+
+
+
+//note(dgmid): is this a NETWORK-level failure (fetch threw before any HTTP response)?
+//"Failed to fetch" / "fetch failed" are the standard messages Chromium and Node's
+//undici produce when the connection drops or DNS/SSL fails. These are transient —
+//retrying (next model) is worthwhile; silently dropping the batch is not.
+
+function isNetworkError( message ) {
+	
+	let m = (message || '').toLowerCase()
+	
+	return m.includes( 'failed to fetch' ) ||
+	       m.includes( 'fetch failed' ) ||
+	       m.includes( 'network error' ) ||
+	       m.includes( 'networkerror' ) ||
+	       m.includes( 'load failed' ) ||
+	       m.includes( 'econnrefused' ) ||
+	       m.includes( 'enetunreach' ) ||
+	       m.includes( 'etimedout' ) ||
+	       m.includes( 'name not resolved' )
+}
+
+
+
+//note(dgmid): extract the suggested wait from a quota error ("Please retry in 57.5s")
+
+function parseQuotaWait( message ) {
+	
+	let m 	= String( message || '' ),
+		mm 	= m.match( /retry in\s+([\d.]+)\s*s/i )
+	
+	if( mm ) {
+		
+		let s = parseFloat( mm[1] )
+		
+		if( s > 0 && s <= 600 ) return Math.max( 5, Math.ceil( s ) )
+	}
+	
+	return 60
+}
+
+
+
+//note(dgmid): does the quota error carry a "retry in Xs" hint? The per-minute limit
+//does; the DAILY limit does not (it resets at midnight Pacific Time instead, so
+//waiting 60s repeatedly is pointless).
+
+function hasRetryHint( message ) {
+	
+	return /retry in\s+[\d.]+\s*s/i.test( String( message || '' ) )
+}
+
+
+
+//note(dgmid): some quota responses spell out the DAILY nature of the limit right in
+//the message (e.g. "...per day...", quotaId ...PerDay...). When present, waiting a
+//minute is pointless — only the midnight-Pacific reset helps, so stop immediately.
+
+function isDailyQuota( message ) {
+	
+	let m = String( message || '' ).toLowerCase()
+	
+	return m.includes( 'per day' ) ||
+	       m.includes( 'perday' ) ||
+	       m.includes( 'per_day' ) ||
+	       m.includes( 'daily limit' ) ||
+	       m.includes( 'daily request quota' ) ||
+	       m.includes( 'perdayperproject' )
+}
+
+
+
+//note(dgmid): how long until midnight in the Pacific timezone (Gemini's free daily
+//quota resets there). Falls back to a conservative ~12h estimate if Intl is missing.
+
+function pacificMidnightETA() {
+	
+	try {
+		
+		let now 	= new Date(),
+			fmt 	= new Intl.DateTimeFormat( 'en-US', {
+				timeZone: 'America/Los_Angeles',
+				hour: 'numeric',
+				minute: 'numeric',
+				hour12: false
+			}),
+			parts 	= fmt.formatToParts( now )
+		
+		let hour 	= parseInt( parts.find( p => p.type === 'hour' ).value, 10 ) % 24,
+			minute 	= parseInt( parts.find( p => p.type === 'minute' ).value, 10 ) || 0
+		
+		let totalMinutes 	= hour * 60 + minute,
+			untilMidnight 	= ( 1440 - totalMinutes ) % 1440
+		
+		return {
+			hours: Math.floor( untilMidnight / 60 ),
+			minutes: untilMidnight % 60
+		}
+		
+	} catch( e ) {
+		
+		return { hours: 12, minutes: 0 }
+	}
+}
+
+
+
+//note(dgmid): show / hide the visible quota banner in the modal. Three states:
+//'minute'  — per-minute limit, automatic retry in progress (wait, attempt)
+//'daily'   — detected daily limit on first hit (no "retry in" hint): resets at midnight Pacific
+//'stopped' — retries exhausted but still blocked: the per-minute window (3×~60s) has
+//            long refreshed, so this is almost certainly the daily limit — same reset info.
+//Both 'daily' and 'stopped' tell the user when the quota resets so they can leave safely.
+
+function showQuotaNotice( kind, wait, attempt ) {
+	
+	let $q = $('#quota-notice')
+	
+	if( !$q.length ) return
+	
+	stopQuotaCountdown()
+	
+	let eta = pacificMidnightETA()
+	
+	if( kind === 'daily' ) {
+		
+		$('#quota-title').text( i18n.t( 'autoorg:progress.quota_daily_title', 'Daily API quota reached' ) )
+		$('#quota-body').html(
+			i18n.t( 'autoorg:progress.quota_daily', 'The free daily quota has been exhausted. It resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window with peace of mind — nothing has been changed and no bookmarks have been lost.', {
+				hours: eta.hours,
+				minutes: eta.minutes
+			})
+		)
+		
+	} else if( kind === 'stopped' ) {
+		
+		$('#quota-title').text( i18n.t( 'autoorg:progress.quota_stopped_title', 'Run stopped — API quota exhausted' ) )
+		$('#quota-body').html(
+			i18n.t( 'autoorg:progress.quota_stopped', 'The run was stopped because the API quota is still exhausted after several retries. This is very likely the daily limit — it resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window with peace of mind — nothing has been changed and no bookmarks have been lost.', {
+				hours: eta.hours,
+				minutes: eta.minutes
+			})
+		)
+		
+	} else {
+		
+		$('#quota-title').text( i18n.t( 'autoorg:progress.quota_minute_title', 'API quota reached — retrying automatically' ) )
+		$('#quota-body').html(
+			i18n.t( 'autoorg:progress.quota_minute', 'The per-minute API limit was reached. Retrying in <strong>{{wait}}s</strong> (attempt {{attempt}} of {{max}}). You can leave this window open — it will continue on its own.', {
+				wait: wait,
+				attempt: attempt,
+				max: MAX_QUOTA_WAITS
+			})
+		)
+		
+		//note(dgmid): live countdown so the wait number ticks down instead of staying frozen
+		startQuotaCountdown( wait )
+	}
+	
+	$q.show()
+}
+
+
+
+function hideQuotaNotice() {
+	
+	stopQuotaCountdown()
+	
+	$('#quota-notice').hide()
+}
+
+
+
+//note(dgmid): live countdown for the per-minute quota banner — the wait number ticks
+//down every second and stops when it reaches zero or the banner is hidden
+
+function startQuotaCountdown( seconds ) {
+	
+	stopQuotaCountdown()
+	
+	let remaining 	= ( Number.isFinite( seconds ) ? Math.max( 0, Math.round( seconds ) ) : 0 ),
+		$secs 		= $('#quota-body strong').first()
+	
+	if( !$secs.length ) return
+	
+	$secs.text( remaining + 's' )
+	
+	quotaTimer = setInterval( () => {
+		
+		remaining--
+		
+		if( remaining <= 0 ) {
+			
+			stopQuotaCountdown()
+			$secs.text( '0s' )
+			return
+		}
+		
+		$secs.text( remaining + 's' )
+	}, 1000 )
+}
+
+function stopQuotaCountdown() {
+	
+	if( quotaTimer ) {
+		
+		clearInterval( quotaTimer )
+		quotaTimer = null
+	}
+}
+
+
+
+//note(dgmid): minimum gap between AI calls — the free Gemini tier allows ~20
+//requests/minute, so without pacing a big run blows the quota within seconds.
+//Configurable via aiConfig.apiGapMs (0 disables pacing, for paid plans).
+
+let lastApiCallAt = 0
+
+function getApiGapMs() {
+	
+	let g = ( store.get( 'aiConfig' ) || {} ).apiGapMs
+	
+	return ( typeof g === 'number' && g >= 0 ) ? g : 3500
+}
+
+
+
+//note(dgmid): how many times a single call may wait out a quota error before giving up.
+//One full wait+retry is enough: a ~60s wait refreshes the per-minute window, so a quota
+//error that survives it is the DAILY limit (resets at midnight Pacific) — further 60s
+//waits would only waste minutes before the same conclusion.
+
+const MAX_QUOTA_WAITS = 1
+
+//note(dgmid): how many quota errors during the REBALANCE pass are tolerated before the
+//AI rebalancing is abandoned and the mechanical pass splits whatever is still over the
+//limit. On the free tier the per-minute limit keeps refreshing for a call or two, which
+//can drag ONE folder out for many minutes of 60s waits — a handful of hits means the
+//daily pool is effectively gone, and mechanical splitting finishes the job without AI.
+
+const REBALANCE_QUOTA_STOP = 6
+
+let rebalanceQuotaHits = 0
+
+
+
+
+//note(dgmid): strip tracking parameters from URLs to avoid confusing Gemini with long URLs
+
+function cleanUrl( urlString ) {
+	
+	try {
+		let u = new URL( urlString )
+		return u.protocol + '//' + u.hostname + u.pathname
+	} catch( e ) {
+		return urlString
+	}
+}
+
+
+
+//note(dgmid): build the classification prompt for one batch of bookmarks
+
+function buildPrompt( batch, existingNames, maxPerFolder, profile, proposedNames ) {
+	
+	let folderList = existingNames.length > 0
+		? existingNames.map( g => `- ${g.path} (${g.count} bookmarks)${g.samples && g.samples.length ? ' — samples: ' + g.samples.join( ' | ' ) : ''}` ).join('\n')
+		: '(none yet)'
+	
+	let maxRule = ''
+	
+	if( maxPerFolder && maxPerFolder > 0 ) {
+		
+		maxRule = `- If more than ${maxPerFolder} items (bookmarks + subfolders) would end up in the same folder, split them into more specific subfolders instead (a group of up to ${maxPerFolder} items may stay together — never more; never leave a folder with a single item, merge it into the closest sibling).
+- You MAY use "Parent/Child/Grandchild" notation (up to ${MAX_NESTING_DEPTH} levels deep from the target folder, e.g. "ULPGC/Documentation/Subjects") when topics nest naturally under one another. Reuse existing folders from the list (with their paths) whenever they fit.`
+		
+		if( existingNames.length > 0 ) {
+			
+			maxRule += `\n- EXISTING folders may be MOVED to a better location: if an existing folder (in any language) would clearly fit better as a subfolder of another folder — one that already exists or that you create in this run — return its full path "Parent/Existing Folder" instead of the bare name. Prefer keeping it in place when the fit is not clearly better.`
+		}
+	}
+	
+	let profileRule = ''
+	
+	if( profile && profile.description ) {
+		
+		profileRule = `- Follow this organizational philosophy when choosing folder names: ${profile.description}`
+		
+		if( profile.folderNames && profile.folderNames.length ) {
+			profileRule += `\n- Prefer folder names in the style of: ${profile.folderNames.slice( 0, 20 ).join( ', ' )}`
+		}
+	}
+	
+	//note(dgmid): when the destination guide carries counts/samples, tell the AI the
+	//decorated line format so it returns the bare path, not the parenthesized suffix
+	let formatNote = ( existingNames.some( g => g.count > 0 || ( g.samples && g.samples.length ) ) )
+		? '\n- Each line above is formatted as "Path/Sub (N bookmarks) — samples: …". When reusing one, return ONLY the path (the part before the parenthesis), e.g. "Path/Sub".'
+		: ''
+	
+	//note(dgmid): folder names proposed by EARLIER batches in this run — later batches must
+	//reuse these EXACT names instead of inventing near-identical variants ("Aprendizaje
+	//Idiomas" vs "Aprendizaje de Idiomas"). Kept small so the prompt stays focused.
+	let proposedNote = ''
+	
+	if( proposedNames && proposedNames.length > 0 ) {
+		
+		proposedNote = `\n- Folders already proposed earlier in this run — reuse these EXACT names when a bookmark fits (never invent a near-identical variant):\n${proposedNames.map( n => `  - ${n}` ).join( '\n' )}`
+	}
+	
+	let excludedNote = ''
+	
+	if( excludedGuideCount > 0 ) {
+		
+		excludedNote = `\n- Some existing folders were excluded from the list above (non-descriptive names or far over the size limit). Their bookmarks are in the list below — assign them to proper folders; never use a folder named like the excluded ones.`
+	}
+	
+	let bookmarksTxt = batch.map( b => {
+		return `- id: ${b.id} | title: "${String(b.title || '(untitled)').substring(0, 120)}" | url: ${cleanUrl( b.url || '' )}`
+	}).join('\n')
+	
+	return `You are a bookmark folder organizer. Assign each bookmark to a folder.
+
+Existing folders in the target location (reuse one of these when a bookmark fits — use the EXACT name):
+${folderList}
+
+Rules:
+- Assign each bookmark to the most fitting existing folder. If none fits well, propose a NEW concise folder name (2 to 4 words, descriptive, in the app's language — this app runs in "${i18n.language}"). Prefer short names and avoid connector words like "de", "y", "el", "la" (use "Aprendizaje Idiomas", not "Aprendizaje de Idiomas"). Keep bookmarks of the same subject together in ONE folder even when their titles are in different languages; never split a subject by language.${formatNote}${proposedNote}${excludedNote}
+- ${maxRule || 'Keep folder names short and clear.'}
+${profileRule ? profileRule + '\n' : ''}- Respond ONLY with a JSON array, no other text, no markdown: [{"id": <id>, "folder": "Folder Name"}, ...]
+- Include EVERY bookmark exactly once.
+
+Bookmarks:
+${bookmarksTxt}`
+}
+
+
+
+//note(dgmid): parse Gemini JSON output defensively. The model may wrap the array in
+//prose, emit an {id: folder} map, or be truncated mid-array (output-token limit) — in
+//every case we recover as many complete assignments as possible.
+
+function extractJsonAssignments( text, validIds ) {
+	
+	let result = []
+	
+	function push( id, fld ) {
+		
+		id 	= parseInt( id, 10 )
+		fld = String( fld || '' ).trim().replace( /\s+/g, ' ' )
+		
+		if( validIds.has( id ) && fld.length > 0 && fld.length <= 60 ) {
+			result.push( { id: id, folder: fld } )
+		}
+	}
+	
+	let trimmed = text.trim()
+	
+	let codeBlock = trimmed.match( /```(?:json)?\s*([\s\S]*?)```/ )
+	if( codeBlock ) trimmed = codeBlock[1].trim()
+	
+	//note(dgmid): Try #1 — the longest JSON array found anywhere in the text (the model
+	//may prepend reasoning, or wrap the array in an object with a moves/assignments field)
+	let arrays = []
+	let m
+	let arrRe = /\[[\s\S]*?\]/g
+	
+	while( ( m = arrRe.exec( trimmed ) ) !== null ) arrays.push( m[0] )
+	
+	arrays.sort( (a,b) => b.length - a.length )
+	
+	for( let cand of arrays ) {
+		
+		try {
+			
+			let parsed = JSON.parse( cand )
+			let arr = Array.isArray( parsed ) ? parsed : ( parsed && ( parsed.moves || parsed.assignments || parsed.bookmarks ) )
+			
+			if( Array.isArray( arr ) && arr.length > 0 ) {
+				
+				let entries = []
+				
+				for( let item of arr ) {
+					
+					if( item == null ) continue
+					
+					let id 	= item.id,
+						fld = item.folder || item.name
+					
+					if( id != null && fld ) entries.push( { id: id, folder: fld } )
+				}
+				
+				if( entries.length > 0 ) {
+					
+					for( let e of entries ) push( e.id, e.folder )
+					
+					if( result.length > 0 ) return result
+				}
+			}
+		}
+		catch( e ) {}
+	}
+	
+	//note(dgmid): Try #2 — a JSON object mapping id → folder: { "1650": "X", "1643": "Y" }
+	try {
+		
+		let parsed = JSON.parse( trimmed )
+		
+		if( parsed && typeof parsed === 'object' && !Array.isArray( parsed ) ) {
+			
+			let start = result.length
+			
+			for( let k in parsed ) {
+				
+				let v = parsed[k]
+				
+				if( v != null && ( typeof v === 'string' || typeof v === 'number' ) ) push( k, v )
+			}
+			
+			if( result.length > start ) return result
+		}
+	}
+	catch( e ) {}
+	
+	//note(dgmid): Try #3 — the array may be TRUNCATED mid-item (output-token limit).
+	//Recover the complete objects that did come through, in either key order
+	let reIdFirst = /\{\s*(?:"?id"?\s*:\s*"?)(\d+)"?\s*,\s*"?(?:folder|name|folderName)"?\s*:\s*"([^"]+)"\s*\}/g
+	let m3
+	
+	while( ( m3 = reIdFirst.exec( trimmed ) ) !== null ) push( m3[1], m3[2] )
+	
+	if( result.length > 0 ) return result
+	
+	let reFolderFirst = /\{\s*"?(?:folder|name|folderName)"?\s*:\s*"([^"]+)"\s*,\s*(?:"?id"?\s*:\s*"?)(\d+)"?\s*\}/g
+	
+	while( ( m3 = reFolderFirst.exec( trimmed ) ) !== null ) push( m3[2], m3[1] )
+	
+	if( result.length > 0 ) return result
+	
+	//note(dgmid): Try #4 — a truncated id→folder MAP: { "1650": "X", ... }
+	let reMap = /"(\d+)"\s*:\s*"([^"]+)"/g
+	
+	while( ( m3 = reMap.exec( trimmed ) ) !== null ) push( m3[1], m3[2] )
+	
+	if( result.length > 0 ) return result
+	
+	//note(dgmid): Try #5 — prose lines like "4280: \"Title\" -> \"Folder\"", "id: 1650 folder: X"
+	for( let line of trimmed.split( '\n' ) ) {
+		
+		let mArrow = line.match( /(\d+)\s*:.*?->\s*"?([^"|]+)"?/ )
+		
+		if( mArrow ) { push( mArrow[1], mArrow[2].trim() ); continue }
+		
+		let mm = line.match( /^\s*[-*]?\s*id\s*[:=]\s*(\d+)[\s,|>\-]*(?:folder\s*[:=])?\s*(.+?)\s*$/i )
+		
+		if( mm ) { push( mm[1], mm[2] ); continue }
+		
+		let m2 = line.match( /^\s*[-*]\s+(.+)/ )
+		if( !m2 ) continue
+		
+		let entry = m2[1]
+		let idMatch = entry.match( /(\d+)/ )
+		if( !idMatch ) continue
+		
+		let fld = entry
+			.replace( new RegExp( idMatch[1] ), '' )
+			.replace( /[|:()\-]/g, '' )
+			.trim()
+			.replace( /\s+/g, ' ' )
+		
+		push( idMatch[1], fld )
+	}
+	
+	return result
+}
+
+
+
+//note(dgmid): parse Gemini response into id → folder assignments
+
+function parseOrganizeResponse( data, batch ) {
+	
+	let text = aiClient.extractTextAny( data )
+	
+	if( !text ) {
+		log.warn( `auto-organize: AI returned empty response` )
+		return []
+	}
+	
+	let validIds = new Set( batch.map( b => b.id ) )
+	
+	let result = extractJsonAssignments( text, validIds )
+	
+	if( result.length > 0 ) return result
+	
+	//note(dgmid): 🔍 DIAGNOSTIC — when the AI gave us text but no assignment could be
+	//extracted, dump head + tail of the raw response so we can see what it actually said
+	//(a prose preamble + trailing JSON would be missed by head-only sampling)
+	log.warn( `auto-organize: response had no parseable assignments (${text.length} chars). Head: ${text.substring( 0, 120 )} | Tail: ${text.substring( Math.max( 0, text.length - 120 ) )}` )
+	
+	return []
+}
+
+
+
+//note(dgmid): send one prompt to the configured AI provider (gemini / openrouter /
+//local OpenAI-compatible server), with an output-token budget and a hard timeout so a
+//hung/rate-limited request can never freeze the pipeline. Resolves with
+//{ data, error, aborted } instead of throwing — data is the raw provider JSON, which
+//the parsers below read through aiClient.extractTextAny.
+
+function aiCall( model, prompt, maxTokens, jsonMode ) {
+	
+	return new Promise( resolve => {
+		
+		//note(dgmid): normalize the saved config and pin the model actually being tried
+		//(the fallback chain may pass a different Gemini model than the configured one)
+		let cfg 		= aiClient.normalizeConfig( store.get( 'aiConfig' ) || {} )
+		cfg.model 	= model || cfg.model
+		
+		let req = aiClient.buildChatRequest( cfg, prompt, maxTokens, { json: jsonMode } )
+		
+		//note(dgmid): pace the call — wait out the configured minimum gap since the
+		//previous call so a run stays under the free-tier request limit
+		let gap = getApiGapMs() - ( Date.now() - lastApiCallAt )
+		if( gap < 0 ) gap = 0
+		
+		setTimeout( () => {
+			
+			lastApiCallAt 	= Date.now()
+			apiCallCount++
+			
+			let controller 	= new AbortController(),
+				timer 		= setTimeout( () => controller.abort(), 60000 )
+			
+			fetch( req.url, {
+				method: 'POST',
+				headers: req.headers,
+				signal: controller.signal,
+				body: JSON.stringify( req.body )
+			}).then( async response => {
+				
+				let data = null
+				
+				try {
+					data = await response.json()
+				} catch( e ) {}
+				
+				if( !response.ok ) {
+					
+					let msg = aiClient.extractErrorAny( response.status, data ) || `HTTP ${response.status}`
+					resolve( { data: null, error: msg, quotaWait: isQuotaError( msg ) ? parseQuotaWait( msg ) : 0, aborted: false } )
+					return
+				}
+				
+				//note(dgmid): a successful call means the wait is over — hide the banner
+				hideQuotaNotice()
+				
+				resolve( { data: data, error: null, quotaWait: 0, aborted: false } )
+				
+			}).catch( error => {
+				
+				let aborted = ( error && error.name === 'AbortError' )
+				
+				resolve( { data: null, error: aborted ? 'request timed out' : ( error.message || 'network error' ), quotaWait: 0, aborted: aborted } )
+				
+			}).finally( () => {
+				
+				clearTimeout( timer )
+			})
+		}, gap )
+	})
+}
+
+
+
+//note(dgmid): call Gemini for one batch of bookmarks, with automatic model fallback.
+//A model that replies with something unparseable (prose preamble, truncated JSON) is
+//treated like a failure and the next fallback model is tried — a batch is only given
+//up on when every model failed.
+
+function classifyBatch( batch, existingNames, maxPerFolder, apiKey, primaryModel, profile, proposedNames ) {
+	
+	let modelsToTry = buildModelsToTry( primaryModel )
+	
+	let bestPartial = []	// best recovery so far — used if every model fails
+	
+	return tryModels( 0, 0, batch )
+	
+	
+	function tryModels( modelIndex, quotaWaits, pending ) {
+		
+		if( modelIndex >= modelsToTry.length ) {
+			
+			//note(dgmid): if every model in the list is known to be quota-blocked this
+			//session, stop the whole run with the reset banner instead of silently
+			//finishing with nothing assigned
+			if( !quotaBlocked && Object.keys( quotaDeadModels ).length >= modelsToTry.length ) {
+				
+				quotaBlocked = true
+				
+				showQuotaNotice( 'daily', 0, 0 )
+				
+				log.warn( `auto-organize: all ${modelsToTry.length} models quota-blocked — stopping run` )
+			}
+			
+			log.warn( `auto-organize: all ${modelsToTry.length} models failed for batch of ${batch.length} — recovered ${bestPartial.length}` )
+			return Promise.resolve( bestPartial )
+		}
+		
+		//note(dgmid): skip models already known to be quota-blocked this session
+		if( quotaDeadModels[ modelsToTry[ modelIndex ] ] || unavailableModels[ modelsToTry[ modelIndex ] ] ) {
+			
+			return tryModels( modelIndex + 1, quotaWaits, pending )
+		}
+		
+		//note(dgmid): "work" is the set actually sent this round — on a partial reply
+		//only the still-missing items go to the next model, not the whole batch again
+		let work 	= ( pending && pending.length > 0 ) ? pending : batch,
+			model 	= modelsToTry[modelIndex],
+			prompt 	= buildPrompt( work, existingNames, maxPerFolder, profile, proposedNames )
+		
+		return aiCall( model, prompt, 8192, true ).then( res => {
+			
+			if( res.aborted || res.error ) {
+				
+				let msg = res.aborted ? 'request timed out' : ( res.error || 'unknown error' )
+				
+				//note(dgmid): QUOTA — distinguish the per-minute limit (has a "retry in Xs"
+				//hint, waiting works) from the DAILY limit (no hint — resets at midnight
+				//Pacific, waiting 60s repeatedly is pointless). All free models share the
+				//same pool, so switching models never helps with a quota error.
+				if( isQuotaError( msg ) ) {
+					
+					//note(dgmid): a "retry in Ns" hint with N in the thousands is the DAILY
+					//limit (resets at midnight Pacific) — don't burn a 60s wait on it
+					let retrySecs = parseFloat( ( String( msg ).match( /retry in\s+([\d.]+)\s*s/i ) || [] )[1] || 0 )
+					
+					let daily = !hasRetryHint( msg ) || isDailyQuota( msg ) || retrySecs > 600
+					
+					if( daily || quotaWaits >= MAX_QUOTA_WAITS ) {
+						
+						//note(dgmid): THIS model's quota is exhausted — remember it and move to
+						//the next model. Free-tier quotas are PER MODEL: one model may be out
+						//(e.g. 3.5-flash) while others still work, so a single blocked model
+						//must not stop the whole run.
+						quotaDeadModels[ model ] = true
+						
+						log.warn( `auto-organize: API quota ${daily ? 'DAILY limit' : 'still active after a full retry wait'} (${model})` )
+						
+						let next = modelIndex + 1
+						while( next < modelsToTry.length && quotaDeadModels[ modelsToTry[ next ] ] ) next++
+						
+						if( next < modelsToTry.length ) {
+							
+							log.warn( `auto-organize: ${model} quota-blocked — falling back to ${modelsToTry[next]}` )
+							
+							return new Promise( resolve => {
+								setTimeout( () => tryModels( next, 0, work ).then( resolve ), 1000 )
+							})
+						}
+						
+						//note(dgmid): EVERY model is now blocked — stop the run; the visible
+						//banner tells the user when the quota resets so they can leave safely.
+						quotaBlocked = true
+						
+						showQuotaNotice( daily ? 'daily' : 'stopped', 0, 0 )
+						
+						log.warn( `auto-organize: API quota blocked on all models (${model}) — stopping run` )
+						
+						return Promise.resolve( bestPartial )
+					}
+					
+					let wait = res.quotaWait || parseQuotaWait( msg )
+					
+					showQuotaNotice( 'minute', wait, quotaWaits + 1 )
+					
+					log.warn( `auto-organize: API quota reached (${model}) — waiting ${wait}s before retrying (${quotaWaits + 1}/${MAX_QUOTA_WAITS})` )
+					
+					$('#progress-text').text(
+						i18n.t('autoorg:progress.quota', 'API quota reached — retrying in {{wait}}s…', { wait: wait })
+					)
+					
+					return new Promise( resolve => {
+						setTimeout( () => {
+							tryModels( modelIndex, quotaWaits + 1, work ).then( resolve )
+						}, wait * 1000 )
+					})
+				}
+				
+				if( isModelUnavailable( msg ) ) {
+					
+					unavailableModels[ model ] = true
+					
+					if( modelIndex + 1 < modelsToTry.length ) {
+						
+						log.warn( `auto-organize: ${model} is no longer available - falling back to ${modelsToTry[ modelIndex + 1 ]}` )
+						
+						return new Promise( resolve => {
+							setTimeout( () => {
+								tryModels( modelIndex + 1, quotaWaits, work ).then( resolve )
+							}, 300 )
+						})
+					
+					} else {
+						
+						log.warn( `auto-organize: ${model} is no longer available and no fallback left - recovered ${bestPartial.length}` )
+						
+						return Promise.resolve( bestPartial )
+					
+					}
+				}
+					
+				if( ( res.aborted || isTransientError( msg ) ) && modelIndex + 1 < modelsToTry.length ) {
+					
+					// note(dgmid): transient error / timeout — try the fallback model
+					
+					return new Promise( resolve => {
+						setTimeout( () => {
+							tryModels( modelIndex + 1, quotaWaits, work ).then( resolve )
+						}, 1000 )
+					})
+				}
+				
+				log.warn( `auto-organize error (${model}): ${msg}` )
+				return Promise.resolve( bestPartial )
+			}
+			
+			let assignments = parseOrganizeResponse( res.data, work )
+			
+			//note(dgmid): complete on the first pass — done
+			if( bestPartial.length === 0 && assignments.length >= work.length ) return Promise.resolve( assignments )
+			
+			//note(dgmid): MERGE, don't replace — the next model may cover ids the previous
+			//one missed, and replacing would silently lose them (first-wins per id)
+			if( assignments.length > 0 || bestPartial.length > 0 ) {
+				
+				let byId = {}
+				
+				for( let a of bestPartial ) if( !( a.id in byId ) ) byId[ a.id ] = a.folder
+				for( let a of assignments ) if( !( a.id in byId ) ) byId[ a.id ] = a.folder
+				
+				bestPartial = Object.keys( byId ).map( id => ( { id: parseInt( id, 10 ), folder: byId[ id ] } ) )
+			}
+			
+			if( bestPartial.length >= batch.length ) return Promise.resolve( bestPartial )
+			
+			//note(dgmid): re-sending the WHOLE batch after a partial reply would double the
+			//API calls for every incomplete answer — send only the still-missing items to
+			//the next model instead, so the free tier's small daily quota lasts longer
+			let missing = work.filter( b => !bestPartial.some( p => p.id === b.id ) )
+			
+			if( assignments.length > 0 ) {
+				log.warn( `auto-organize: ${model} recovered only ${assignments.length} of ${work.length} — ${missing.length} still missing, trying next model` )
+			}
+			
+			if( missing.length > 0 && modelIndex + 1 < modelsToTry.length ) {
+				
+				return new Promise( resolve => {
+					setTimeout( () => {
+						tryModels( modelIndex + 1, quotaWaits, missing ).then( resolve )
+					}, 1000 )
+				})
+			}
+			
+			return Promise.resolve( bestPartial )
+		})
+	}
+}
+
+
+
+//note(dgmid): resolve a proposed "Parent/Child" path against the existing tree on the
+//server. Returns the deepest existing ancestor id (or null) plus the segments that
+//would need to be created — used both for the initial classification and for the
+//rebalance pass.
+
+function resolveProposedPath( path ) {
+	
+	let folders = store.get( 'folders' ) || []
+	
+	let folderIdByName = {}
+	
+	for( let f of folders ) {
+		
+		let parent = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+		
+		folderIdByName[ `${parent}|${String( f.text ).toLowerCase()}` ] = f.id
+	}
+	
+	let segments = String( path ).split( '/' ).map( s => s.trim() ).filter( Boolean ).slice( 0, MAX_NESTING_DEPTH )
+	
+	if( segments.length === 0 ) return null
+	
+	let currentId 	= getDestId(),
+		foundId 	= null
+	
+	for( let i = 0; i < segments.length; i++ ) {
+		
+		let key = `${currentId}|${segments[i].toLowerCase()}`
+		
+		if( folderIdByName[ key ] != null ) {
+			
+			currentId = folderIdByName[ key ]
+			foundId 	= currentId
+			
+		} else {
+			
+			return { id: foundId, segments: segments, created: segments.slice( i ) }
+		}
+	}
+	
+	return { id: foundId, segments: segments, created: [] }
+}
+
+
+
+//note(dgmid): rewrite a move to a new path and re-resolve it against the server tree,
+//so folderId / isNew / created stay consistent after the rebalance pass regroups things
+
+function rewriteMovePath( m, newPath ) {
+	
+	newPath = newPath.slice( 0, MAX_NESTING_DEPTH )
+	
+	if( newPath.length === 0 ) return
+	
+	m.folderName 	= newPath.join( '/' )
+	m.folderPath 	= newPath
+	
+	let resolved 	= resolveProposedPath( m.folderName )
+	
+	if( resolved ) {
+		
+		m.folderId 	= resolved.id
+		m.isNew 	= resolved.created.length > 0
+		m.created 	= resolved.created
+		
+	} else {
+		
+		m.folderId 	= null
+		m.isNew 	= true
+		m.created 	= newPath.slice()
+	}
+}
+
+
+
+//note(dgmid): count the elements (bookmarks + subfolders) of every proposed folder so the
+//rebalance pass can find the folders that exceed the soft limit. Keys are the lowercased
+//full path; display keeps the original casing for the AI prompt.
+
+function computeElementCounts() {
+	
+	let bmCount 	= new Map(),	// lowerKey -> direct bookmark count
+		subMap 		= new Map(),	// lowerKey -> Map(lowerChild -> { name, count })
+		display 	= new Map()		// lowerKey -> [original-cased segments]
+	
+	for( let m of moves ) {
+		
+		if( !( m.accepted && m.folderName ) ) continue
+		
+		let segs = m.folderPath || []
+		
+		if( segs.length === 0 ) continue
+		
+		let key = segs.join( '/' ).toLowerCase()
+		
+		bmCount.set( key, ( bmCount.get( key ) || 0 ) + 1 )
+		if( !display.has( key ) ) display.set( key, segs.slice() )
+		
+		for( let i = 1; i < segs.length; i++ ) {
+			
+			let parentKey 	= segs.slice( 0, i ).join( '/' ).toLowerCase(),
+				childName 	= segs[i],
+				childKey 	= childName.toLowerCase()
+			
+			if( !subMap.has( parentKey ) ) subMap.set( parentKey, new Map() )
+			if( !subMap.get( parentKey ).has( childKey ) ) {
+				subMap.get( parentKey ).set( childKey, { name: childName, count: 0 } )
+			}
+			if( !display.has( parentKey ) ) display.set( parentKey, segs.slice( 0, i ) )
+		}
+	}
+	
+	//note(dgmid): subtree bookmark counts per child (how many bookmarks live under a subfolder)
+	for( let m of moves ) {
+		
+		if( !( m.accepted && m.folderName ) ) continue
+		
+		let segs = m.folderPath || []
+		
+		for( let i = 0; i + 1 < segs.length; i++ ) {
+			
+			let parentKey 	= segs.slice( 0, i + 1 ).join( '/' ).toLowerCase(),
+				childKey 	= segs[i + 1].toLowerCase(),
+				child 		= subMap.get( parentKey ) && subMap.get( parentKey ).get( childKey )
+			
+			if( child ) child.count++
+		}
+	}
+	
+	return { bmCount, subMap, display }
+}
+
+
+
+//note(dgmid): build the rebalance prompt — group the direct items (subfolders and loose
+//bookmarks) of one overflowing folder into balanced subfolders of at most ~maxPerFolder
+
+function buildRebalancePrompt( displayName, items, maxPerFolder, proposedNames ) {
+	
+	let itemTxt = items.map( it => `- ${it.label}` ).join( '\n' )
+	
+	let proposedNote = ''
+	
+	if( proposedNames && proposedNames.length > 0 ) {
+		
+		proposedNote = `\nReuse these subfolder names (EXACT spelling) when items fit; never invent a near-identical variant:\n${proposedNames.map( n => `  - ${n}` ).join( '\n' )}`
+	}
+	
+	return `You are balancing a bookmark folder tree. The folder "${displayName}" currently holds ${items.length} items (subfolders and bookmarks). Group them into new subfolders so that EACH new subfolder holds at most ~${maxPerFolder} items. A group of up to ${maxPerFolder} items may stay together — never more. NEVER create a subfolder with a single item — merge that item into the most similar sibling subfolder.${proposedNote}
+Items:
+${itemTxt}
+For each SUBFOLDER return its name exactly as written; for each BOOKMARK return "id=<id>".
+Respond ONLY with a JSON array, no other text, no markdown: [{"item": "<exact item>", "folder": "New Subfolder Name"}, ...]
+Folder names: 1 to 3 words, short, descriptive, in the app's language (${i18n.language}). Reuse a subfolder name you already proposed when several items belong together.
+Include EVERY item exactly once.`
+}
+
+
+
+//note(dgmid): parse the rebalance response into {item, folder} assignments — same
+//defensive extraction as the classify parser (embedded JSON, maps, truncated arrays)
+
+function parseRebalanceResponse( data ) {
+	
+	let text = aiClient.extractTextAny( data )
+	
+	if( !text ) {
+		log.warn( `auto-organize: rebalance returned empty response` )
+		return []
+	}
+	
+	let result = []
+	
+	function pushEntry( raw, folder ) {
+		
+		raw 	= ( raw == null ) ? '' : String( raw ).trim()
+		folder 	= ( folder == null ) ? '' : String( folder ).trim().replace( /\s+/g, ' ' )
+		
+		if( !raw || !folder || folder.length > 60 ) return
+		
+		let idM = raw.match( /^id[:=]?\s*(\d+)$/i )
+		
+		if( idM ) { result.push( { isBookmark: true, rawId: idM[1], raw: raw, folder: folder } ); return }
+		
+		let numM = raw.match( /^(\d+)$/ )
+		
+		if( numM ) { result.push( { isBookmark: true, rawId: numM[1], raw: raw, folder: folder } ); return }
+		
+		result.push( { isBookmark: false, raw: raw, folder: folder } )
+	}
+	
+	let trimmed = text.trim()
+	
+	let codeBlock = trimmed.match( /```(?:json)?\s*([\s\S]*?)```/ )
+	if( codeBlock ) trimmed = codeBlock[1].trim()
+	
+	//note(dgmid): Try #1 — the longest JSON array found anywhere in the text
+	let arrays = []
+	let m
+	let arrRe = /\[[\s\S]*?\]/g
+	
+	while( ( m = arrRe.exec( trimmed ) ) !== null ) arrays.push( m[0] )
+	
+	arrays.sort( (a,b) => b.length - a.length )
+	
+	for( let cand of arrays ) {
+		
+		try {
+			
+			let parsed = JSON.parse( cand )
+			let arr = Array.isArray( parsed ) ? parsed : ( parsed && ( parsed.moves || parsed.assignments || parsed.groups ) )
+			
+			if( Array.isArray( arr ) && arr.length > 0 ) {
+				
+				let start = result.length
+				
+				for( let it of arr ) {
+					if( it ) pushEntry( it.item ?? it.id ?? it.name, it.folder ?? it.group )
+				}
+				
+				if( result.length > start ) return result
+			}
+		}
+		catch( e ) {}
+	}
+	
+	//note(dgmid): Try #2 — a JSON map { "item": "folder" }
+	try {
+		
+		let parsed = JSON.parse( trimmed )
+		
+		if( parsed && typeof parsed === 'object' && !Array.isArray( parsed ) ) {
+			
+			let start = result.length
+			
+			for( let k in parsed ) {
+				
+				let v = parsed[k]
+				
+				if( v != null && ( typeof v === 'string' || typeof v === 'number' ) ) pushEntry( k, v )
+			}
+			
+			if( result.length > start ) return result
+		}
+	}
+	catch( e ) {}
+	
+	//note(dgmid): Try #3 — truncated array: recover the complete objects that came through
+	let re1 = /\{\s*"?(?:item|id|name)"?\s*:\s*(?:"([^"]+)"|(\d+))\s*,\s*"?(?:folder|group)"?\s*:\s*"([^"]+)"\s*\}/g
+	let m3
+	
+	while( ( m3 = re1.exec( trimmed ) ) !== null ) pushEntry( m3[1] || m3[2], m3[3] )
+	
+	if( result.length > 0 ) return result
+	
+	let re2 = /\{\s*"?(?:folder|group)"?\s*:\s*"([^"]+)"\s*,\s*"?(?:item|id|name)"?\s*:\s*(?:"([^"]+)"|(\d+))\s*\}/g
+	
+	while( ( m3 = re2.exec( trimmed ) ) !== null ) pushEntry( m3[2] || m3[3], m3[1] )
+	
+	if( result.length > 0 ) return result
+	
+	//note(dgmid): Try #4 — markdown fallback "- item | folder" / "- item -> folder"
+	for( let line of trimmed.split( '\n' ) ) {
+		
+		let mm = line.match( /^\s*[-*]\s+(.+?)\s*[|>-]\s*(.+?)\s*$/ )
+		
+		if( mm ) pushEntry( mm[1], mm[2] )
+	}
+	
+	if( result.length === 0 ) {
+		log.warn( `auto-organize: rebalance response had no parseable assignments (${text.length} chars). Head: ${text.substring( 0, 120 )} | Tail: ${text.substring( Math.max( 0, text.length - 120 ) )}` )
+	}
+	
+	return result
+}
+
+
+
+//note(dgmid): call Gemini for one rebalance grouping, with the same model fallback
+
+function classifyRebalance( displayName, items, maxPerFolder, apiKey, primaryModel, proposedNames, callback ) {
+	
+	let modelsToTry = buildModelsToTry( primaryModel )
+	
+	let bestPartial = []	// best recovery so far — used if every model fails
+	
+	tryModels( 0, 0 )
+	
+	
+	function tryModels( modelIndex, quotaWaits ) {
+		
+		if( modelIndex >= modelsToTry.length ) {
+			
+			if( !quotaBlocked && Object.keys( quotaDeadModels ).length >= modelsToTry.length ) {
+				
+				quotaBlocked = true
+				
+				showQuotaNotice( 'daily', 0, 0 )
+				
+				log.warn( `auto-organize rebalance: all ${modelsToTry.length} models quota-blocked — stopping run` )
+			}
+			
+			log.warn( `auto-organize: all ${modelsToTry.length} models failed for rebalance of "${displayName}" — recovered ${bestPartial.length} of ${items.length}` )
+			callback( bestPartial )
+			return
+		}
+		
+		//note(dgmid): skip models already known to be quota-blocked this session
+		if( quotaDeadModels[ modelsToTry[ modelIndex ] ] || unavailableModels[ modelsToTry[ modelIndex ] ] ) {
+			
+			tryModels( modelIndex + 1, quotaWaits )
+			return
+		}
+		
+		let model 	= modelsToTry[modelIndex],
+			prompt 	= buildRebalancePrompt( displayName, items, maxPerFolder, proposedNames )
+		
+		aiCall( model, prompt, 8192, true ).then( res => {
+			
+			if( res.aborted || res.error ) {
+				
+				let msg = res.aborted ? 'request timed out' : ( res.error || 'unknown error' )
+				
+				//note(dgmid): QUOTA — same policy as classifyBatch: per-minute waits and
+				//retries the same model; the DAILY limit (no "retry in" hint) stops the run
+				if( isQuotaError( msg ) ) {
+					
+					//note(dgmid): count quota hits during the rebalance pass. On the free tier
+					//the per-minute limit keeps refreshing for a call or two, which can drag one
+					//folder out for many minutes of 60s waits. After a handful of hits the daily
+					//pool is effectively gone: stop the AI pass and let the mechanical pass split
+					//the residue.
+					rebalanceQuotaHits++
+					
+					if( rebalanceQuotaHits >= REBALANCE_QUOTA_STOP ) {
+						
+						quotaBlocked = true
+						
+						hideQuotaNotice()
+						
+						log.warn( `auto-organize rebalance: quota hit ${rebalanceQuotaHits} times - stopping AI rebalance, finishing mechanically` )
+					}
+					
+					if( quotaBlocked ) {
+						
+						callback( bestPartial )
+						return
+					}
+					
+					
+					//note(dgmid): a "retry in Ns" hint with N in the thousands is the DAILY
+					//limit (resets at midnight Pacific) — don't burn a 60s wait on it
+					let retrySecs = parseFloat( ( String( msg ).match( /retry in\s+([\d.]+)\s*s/i ) || [] )[1] || 0 )
+					
+					let daily = !hasRetryHint( msg ) || isDailyQuota( msg ) || retrySecs > 600
+					
+					if( daily || quotaWaits >= MAX_QUOTA_WAITS ) {
+						
+						//note(dgmid): THIS model's quota is exhausted — remember it and move to
+						//the next model. Free-tier quotas are PER MODEL, so a single blocked
+						//model must not stop the whole run.
+						quotaDeadModels[ model ] = true
+						
+						log.warn( `auto-organize rebalance: API quota ${daily ? 'DAILY limit' : 'still active after a full retry wait'} (${model})` )
+						
+						let next = modelIndex + 1
+						while( next < modelsToTry.length && quotaDeadModels[ modelsToTry[ next ] ] ) next++
+						
+						if( next < modelsToTry.length ) {
+							
+							log.warn( `auto-organize rebalance: ${model} quota-blocked — falling back to ${modelsToTry[next]}` )
+							
+							setTimeout( () => tryModels( next, 0 ), 1000 )
+							return
+						}
+						
+						quotaBlocked = true
+						
+						showQuotaNotice( daily ? 'daily' : 'stopped', 0, 0 )
+						
+						log.warn( `auto-organize rebalance: API quota blocked on all models (${model}) — stopping run` )
+						
+						callback( bestPartial )
+						return
+					}
+					
+					let wait = res.quotaWait || parseQuotaWait( msg )
+					
+					showQuotaNotice( 'minute', wait, quotaWaits + 1 )
+					
+					log.warn( `auto-organize rebalance: API quota reached (${model}) — waiting ${wait}s before retrying (${quotaWaits + 1}/${MAX_QUOTA_WAITS})` )
+					
+					$('#progress-text').text(
+						i18n.t('autoorg:progress.quota', 'API quota reached — retrying in {{wait}}s…', { wait: wait })
+					)
+					
+					setTimeout( () => tryModels( modelIndex, quotaWaits + 1 ), wait * 1000 )
+					return
+				}
+				
+				if( isModelUnavailable( msg ) ) {
+					
+					unavailableModels[ model ] = true
+					
+					if( modelIndex + 1 < modelsToTry.length ) {
+						
+						log.warn( `auto-organize rebalance: ${model} is no longer available - falling back to ${modelsToTry[ modelIndex + 1 ]}` )
+						
+						setTimeout( () => tryModels( modelIndex + 1, quotaWaits ), 300 )
+					
+					} else {
+						
+						log.warn( `auto-organize rebalance: ${model} is no longer available and no fallback left - recovered ${bestPartial.length} of ${items.length}` )
+						
+						callback( bestPartial )
+					
+					}
+					
+					return
+				}
+					
+				if( ( res.aborted || isTransientError( msg ) ) && modelIndex + 1 < modelsToTry.length ) {
+					
+					setTimeout( () => tryModels( modelIndex + 1, quotaWaits ), 1000 )
+					return
+				}
+				
+				log.warn( `auto-organize rebalance error (${model}): ${msg}` )
+				callback( bestPartial )
+				return
+			}
+			
+			let results = parseRebalanceResponse( res.data )
+			
+			//note(dgmid): complete grouping — done
+			if( results.length >= items.length ) {
+				
+				callback( results )
+				return
+			}
+			
+			//note(dgmid): MERGE, don't replace — union by item key (first-wins) so nothing
+			//covered by an earlier model is lost when the next one returns a partial set
+			if( results.length > 0 || bestPartial.length > 0 ) {
+				
+				let byItem = {}
+				
+				for( let r of bestPartial ) {
+					let k = r.isBookmark ? 'id=' + r.rawId : 'f:' + r.raw.toLowerCase()
+					if( !( k in byItem ) ) byItem[ k ] = r
+				}
+				
+				for( let r of results ) {
+					let k = r.isBookmark ? 'id=' + r.rawId : 'f:' + r.raw.toLowerCase()
+					if( !( k in byItem ) ) byItem[ k ] = r
+				}
+				
+				bestPartial = Object.values( byItem )
+			}
+			
+			if( bestPartial.length >= items.length ) {
+				
+				callback( bestPartial )
+				return
+			}
+			
+			if( modelIndex + 1 < modelsToTry.length ) {
+				
+				setTimeout( () => tryModels( modelIndex + 1, quotaWaits ), 1000 )
+				return
+			}
+			
+			callback( bestPartial )
+		})
+	}
+}
+
+
+
+//note(dgmid): rebalance ONE overflowing folder — gather its direct items, ask the AI to
+//group them into balanced subfolders, then rewrite the affected moves. An empty key means
+//the destination root itself (too many direct children = the "wall of folders" problem).
+
+function rebalanceOne( key, maxPerFolder, apiKey, primaryModel, callback ) {
+	
+	let counts = computeElementCounts()
+	
+	let isRoot 	= ( key === '' ),
+		segs 	= isRoot ? [] : ( counts.display.get( key ) || key.split( '/' ) ),
+		children = counts.subMap.get( key ) || new Map()
+	
+	let directBookmarks = moves.filter( m =>
+		m.accepted && m.folderName && m.folderPath.join( '/' ).toLowerCase() === key
+	)
+	
+	//note(dgmid): for the destination root, the direct children are all first segments
+	if( isRoot ) {
+		
+		children = new Map()
+		
+		for( let m of moves ) {
+			
+			if( !( m.accepted && m.folderName ) ) continue
+			
+			let p = m.folderPath || []
+			
+			if( p.length === 0 ) continue
+			
+			let name 	= p[0],
+				lower 	= name.toLowerCase()
+			
+			if( !children.has( lower ) ) children.set( lower, { name: name, count: 0 } )
+			children.get( lower ).count++
+		}
+	}
+	
+	let items = []
+	
+	for( let [ck, child] of children ) {
+		items.push( { kind: 'folder', childKey: ck, child: child, label: `SUBFOLDER "${child.name}" (${child.count} bookmarks)` } )
+	}
+	
+	for( let bm of directBookmarks ) {
+		items.push( { kind: 'bookmark', move: bm, label: `BOOKMARK id=${bm.id} | "${String( bm.title || '(untitled)' ).substring( 0, 80 )}"` } )
+	}
+	
+	let displayName = isRoot
+		? i18n.t('autoorg:label.destroot', 'the destination folder')
+		: segs.join( '/' )
+	
+	//note(dgmid): CHUNKED — a folder can hold hundreds of direct items, and the AI's
+	//output-token budget can't emit hundreds of JSON assignments in one reply (the
+	//reply gets truncated and the folder survives untouched). Split into batches of
+	//~60, feed each batch the folder names earlier batches proposed so the groupings
+	//stay consistent, then apply the union of all results.
+	
+	const REBALANCE_CHUNK = 60
+	
+	let chunks = []
+	
+	for( let i = 0; i < items.length; i += REBALANCE_CHUNK ) {
+		chunks.push( items.slice( i, i + REBALANCE_CHUNK ) )
+	}
+	
+	let proposedNames 	= [],
+		allResults 		= []
+	
+	function applyResults( results ) {
+		
+		//note(dgmid): apply subfolder groupings first, then loose bookmarks
+		for( let r of results ) {
+			
+			if( r.isBookmark ) continue
+			
+			let child = children.get( r.raw.toLowerCase() )
+			
+			//note(dgmid): markdown fallback may echo the full label back — "SUBFOLDER "X" (3 bookmarks)"
+			if( !child ) {
+				let m2 = r.raw.match( /^subfolder\s+"?([^"]+?)"?\s*\(\d+\s+bookmarks?\)$/i )
+				if( m2 ) child = children.get( m2[1].trim().toLowerCase() )
+			}
+			
+			if( !child ) continue
+			
+			if( !isRoot && r.folder.toLowerCase() === segs[segs.length - 1].toLowerCase() ) continue
+			
+			for( let m of moves ) {
+				
+				if( !( m.accepted && m.folderName ) ) continue
+				
+				let p = m.folderPath || []
+				
+				if( p.length < segs.length + 1 ) continue
+				
+				let match = true
+				
+				for( let i = 0; i < segs.length; i++ ) {
+					if( p[i].toLowerCase() !== segs[i].toLowerCase() ) { match = false; break }
+				}
+				
+				if( !match ) continue
+				
+				if( p[segs.length].toLowerCase() !== child.name.toLowerCase() ) continue
+				
+				rewriteMovePath( m, segs.concat( [ r.folder ] ).concat( p.slice( segs.length + 1 ) ) )
+			}
+		}
+		
+		for( let r of results ) {
+			
+			if( !r.isBookmark ) continue
+			
+			let bm = directBookmarks.find( m => String( m.id ) === r.rawId )
+			
+			if( !bm ) continue
+			
+			if( !isRoot && r.folder.toLowerCase() === segs[segs.length - 1].toLowerCase() ) continue
+			
+			rewriteMovePath( bm, segs.concat( [ r.folder ] ) )
+		}
+	}
+	
+	function runChunk( ci ) {
+		
+		//note(dgmid): quota-blocked / cancelled — stop calling the AI and finish this
+		//folder with whatever the earlier chunks produced (the mechanical pass in
+		//finish() then splits anything still over the limit, without AI)
+		if( ci >= chunks.length || cancelled || quotaBlocked ) {
+			
+			try {
+				applyResults( allResults )
+			} catch( e ) {
+				log.error( `auto-organize: rebalance apply error - ${e.message}` )
+			}
+			
+			callback()
+			return
+		}
+		
+		classifyRebalance( displayName, chunks[ci], maxPerFolder, apiKey, primaryModel, proposedNames, function( results ) {
+			
+			//note(dgmid): an exception in here must never kill the chunk chain silently
+			//(that would freeze the rebalance with no way forward) — log and continue
+			try {
+				
+				for( let r of results ) {
+					
+					allResults.push( r )
+					
+					if( r && r.folder ) {
+						
+						let name = String( r.folder ).trim()
+						
+						if( name && !proposedNames.includes( name ) ) proposedNames.push( name )
+					}
+				}
+				
+				//note(dgmid): keep the fed-back list bounded — the most recent names matter most
+				if( proposedNames.length > 40 ) proposedNames = proposedNames.slice( -40 )
+				
+			} catch( e ) {
+				
+				log.error( `auto-organize: rebalance chunk callback error - ${e.message}` )
+			}
+			
+			setTimeout( () => runChunk( ci + 1 ), 200 )
+		})
+	}
+	
+	runChunk( 0 )
+}
+
+
+
+//note(dgmid): the rebalance pass — repeatedly find folders whose element count exceeds the
+//soft limit (maxPerFolder + ~20% tolerance) and split them, up to MAX_REBALANCE_ROUNDS
+//rounds. This gives a REAL guarantee of a balanced tree instead of relying only on the
+//initial classification prompt (which can't see the global counts across batches).
+
+function rebalanceMoves( maxPerFolder, apiKey, primaryModel, done ) {
+	
+	let tol 		= getTolerance( maxPerFolder ),
+		threshold 	= maxPerFolder + tol,
+		rounds 		= 0,
+		calls 		= 0,
+		MAX_ROUNDS 	= 3,
+		MAX_CALLS 	= 40
+
+	rebalanceQuotaHits = 0
+	
+	//note(dgmid): MECHANICAL FALLBACK — whenever the AI pass ends before balancing
+	//everything (API quota, call cap or max rounds), split whatever is still over the
+	//soft limit by URL domain, without AI. Keeps every folder at or near the soft limit
+	//even on the free tier's tiny quota. Skipped when the user cancelled the run.
+	function finish( early ) {
+		
+		//note(dgmid): GUARANTEE — if any folder is still over the hard limit when the AI
+		//pass ends (truncated replies, quota, call/round caps), split it mechanically (by
+		//domain / "Otros" chunks) without AI. `early` is the common case, but a "clean"
+		//AI finish can also leave folders over the limit when a rebalance reply was
+		//truncated, so the check runs either way.
+		if( !cancelled ) {
+			
+			let { over } = findOverLimitKeys( maxPerFolder )
+			
+			if( early || over.length > 0 ) {
+				
+				let n = mechanicalRebalance( maxPerFolder )
+				
+				if( n > 0 ) {
+					
+					rebalancedMechanical += n
+					
+					log.info( `[auto-organize] mechanical rebalance (by domain) — ${n} folder(s) split without AI` )
+				}
+			}
+		}
+		
+		done()
+	}
+	
+	function runRound() {
+		
+		if( cancelled || quotaBlocked || rounds >= MAX_ROUNDS ) {
+			
+			if( rounds >= MAX_ROUNDS ) log.info( `[auto-organize] rebalance finished after ${rounds} rounds` )
+			
+			finish( true )
+			return
+		}		rounds++
+		
+		let { over: overflow } = findOverLimitKeys( maxPerFolder )
+		
+		//note(dgmid): deepest first so children are balanced before their parents; the
+		//destination root ('') is always processed last
+		overflow.sort( (a,b) => {
+			let da = ( a === '' ) ? -1 : a.split( '/' ).length,
+				db = ( b === '' ) ? -1 : b.split( '/' ).length
+			return db - da
+		})
+		
+		if( overflow.length === 0 ) {
+			
+			log.info( `[auto-organize] rebalance → all folders within threshold (${threshold})` )
+			finish( false )
+			return
+		}
+		
+		log.info( `[auto-organize] rebalance → round=${rounds} maxPerFolder=${maxPerFolder} threshold=${threshold} overflow=${overflow.length}` )
+		
+		setProgress( rounds, MAX_ROUNDS,
+			i18n.t('autoorg:progress.rebalancing', 'Rebalancing folders…') + ` — ${overflow.length} folder(s), round ${rounds}/${MAX_ROUNDS}`
+		)
+
+		
+		let idx = 0
+		
+		function nextOne() {
+			
+			if( calls >= MAX_CALLS ) {
+				
+				log.warn( `auto-organize: rebalance reached ${MAX_CALLS} API calls, stopping` )
+				finish( true )
+				return
+			}
+			
+			if( cancelled || quotaBlocked || idx >= overflow.length ) {
+				
+				setTimeout( runRound, 100 )
+				return
+			}
+			
+			let key = overflow[idx++]
+			
+			if( key !== '' && key.split( '/' ).length >= MAX_NESTING_DEPTH ) {
+				
+				log.warn( `auto-organize: rebalance skipped "${key}" — max nesting depth (${MAX_NESTING_DEPTH}) reached` )
+				nextOne()
+				return
+			}
+			
+			//note(dgmid): per-folder progress so a long AI pass never looks frozen
+			setProgress( idx, overflow.length,
+				i18n.t('autoorg:progress.rebalancing', 'Rebalancing folders…') + ` — ${ key === '' ? i18n.t('autoorg:label.destroot', 'the destination folder') : key } (${idx}/${overflow.length})`
+			)
+			
+			calls++
+			
+			rebalanceOne( key, maxPerFolder, apiKey, primaryModel, () => {
+				
+				setTimeout( nextOne, 150 )
+			})
+		}
+		
+		nextOne()
+	}
+	
+	runRound()
+}
+
+
+
+//note(dgmid): mechanical rebalance helpers — NO AI. An overflowing folder's direct
+//bookmarks are grouped by URL domain and moved into domain-named subfolders, oversized
+//domains are chunked, and the residue (small domains / no URL) is mopped up into
+//"Otros" folders only when the parent would still overflow. Deterministic, quota-proof.
+
+function domainOf( url ) {
+	
+	try {
+		
+		return new URL( url ).hostname.replace( /^www\./, '' ).toLowerCase()
+		
+	} catch( e ) {
+		
+		return ''
+	}
+}
+
+
+
+function displayDomain( domain ) {
+	
+	//note(dgmid): "aliexpress.com" → "Aliexpress.com", "play.chessclub.com" → "Play.chessclub.com"
+	//(capitalize only the first label — TLDs stay lowercase)
+	let parts = String( domain ).split( '.' )
+	
+	parts[0] = parts[0].charAt( 0 ).toUpperCase() + parts[0].slice( 1 )
+	
+	return parts.join( '.' )
+}
+
+
+
+function chunkArray( arr, size ) {
+	
+	let out = []
+	
+	for( let i = 0; i < arr.length; i += size ) out.push( arr.slice( i, i + size ) )
+	
+	return out
+}
+
+
+
+//note(dgmid): split every folder still over the soft limit by URL domain. Returns the
+//number of folders balanced. Runs synchronously over the in-memory proposal (moves).
+
+function mechanicalRebalance( maxPerFolder ) {
+	
+	if( !maxPerFolder || maxPerFolder < 1 ) return 0
+	
+	let tol 		= getTolerance( maxPerFolder ),
+		threshold 	= maxPerFolder + tol,
+		MIN_GROUP 	= 3,
+		balanced 	= new Set()		// lowercased keys split mechanically (for the notice)
+	
+	//note(dgmid): split one overflowing folder — group its direct bookmarks by domain.
+	//Returns true if anything moved. `display` preserves the original casing of paths
+	//(keys are lowercased, like the AI rebalance's computeElementCounts map).
+	function splitOne( key, display ) {
+		
+		let isRoot 	= ( key === '' ),
+			segs 	= isRoot ? [] : ( display.get( key ) || key.split( '/' ) )
+		
+		let direct = moves.filter( m => m.accepted && m.folderName && m.folderPath.join( '/' ).toLowerCase() === key )
+		
+		if( direct.length <= threshold ) return false
+		
+		let byDomain = new Map()
+		
+		for( let m of direct ) {
+			
+			let d = domainOf( m.url )
+			
+			if( d === '' ) continue	// no-URL bookmarks always fall through to the residue path
+			
+			if( !byDomain.has( d ) ) byDomain.set( d, [] )
+			
+			byDomain.get( d ).push( m )
+		}
+		
+		let moved = false
+		
+		for( let [ d, list ] of byDomain ) {
+			
+			if( list.length < MIN_GROUP ) continue	// small domains stay in the parent
+			
+			let name = displayDomain( d )
+			
+			//note(dgmid): never nest a subfolder with the same name as its parent
+			if( !isRoot && name.toLowerCase() === segs[ segs.length - 1 ].toLowerCase() ) continue
+			
+			if( list.length <= maxPerFolder ) {
+				
+				for( let m of list ) rewriteMovePath( m, segs.concat( [ name ] ) )
+				
+				moved = true
+				
+			} else {
+				
+				//note(dgmid): chunk oversized domains — "Aliexpress.com 1", "Aliexpress.com 2"…
+				let chunks = chunkArray( list, maxPerFolder )
+				
+				for( let i = 0; i < chunks.length; i++ ) {
+					
+					let cname = name + ' ' + ( i + 1 )
+					
+					for( let m of chunks[i] ) rewriteMovePath( m, segs.concat( [ cname ] ) )
+					
+					moved = true
+				}
+			}
+		}
+		
+		//note(dgmid): residue (small domains + no-URL) still sits directly in the parent.
+		//The parent's element count is residue + its subfolders, so chunk the residue into
+		//"Otros" folders until the parent fits under the threshold (or as close as
+		//mechanical grouping allows) — otherwise a folder whose residue is small but whose
+		//subfolder count is high would stay over the limit with no way out on the next pass.
+		let residue = moves.filter( m => m.accepted && m.folderName && m.folderPath.join( '/' ).toLowerCase() === key )
+		
+		//note(dgmid): how many direct children (subfolders) the parent has after the
+		//domain split — every one of them counts as an element of the parent
+		let childKeys = new Set()
+		
+		for( let m of moves ) {
+			
+			if( !( m.accepted && m.folderName ) ) continue
+			
+			let p = m.folderPath || []
+			
+			if( p.length === 0 ) continue
+			
+			if( isRoot ) {
+				
+				childKeys.add( p[0].toLowerCase() )
+				
+			} else if( p.slice( 0, -1 ).join( '/' ).toLowerCase() === key ) {
+				
+				childKeys.add( p[ p.length - 1 ].toLowerCase() )
+			}
+		}
+		
+		//note(dgmid): the mechanical pass can only group LOOSE bookmarks — it can never
+		//consolidate subfolders. If the split itself left more distinct subfolders than
+		//the threshold ("wall of folders": 30+ domains with several bookmarks each), the
+		//parent stays over the soft limit with no mechanical way out. Say so honestly.
+		if( childKeys.size > threshold ) {
+			log.warn( `auto-organize: mechanical split of "${segs.join( '/' ) || '(root)'}" left ${childKeys.size} subfolders (> ${threshold}) — folder may stay over the soft limit` )
+		}
+		
+		//note(dgmid): solve for the max number of residue bookmarks that may stay directly
+		//in the parent — each "Otros" folder created also costs one element, so walk down
+		//until residue + subfolders + Otros folders fits under the threshold (soft limit)
+		let keep = residue.length
+		
+		while( keep > 0 ) {
+			
+			let otros = Math.ceil( ( residue.length - keep ) / maxPerFolder )
+			
+			if( keep + childKeys.size + otros <= threshold ) break
+			
+			keep--
+		}
+		
+		if( keep < residue.length ) {
+			
+			let others 		= i18n.t( 'autoorg:label.others', 'Otros' ),
+				overflow 	= residue.slice( keep ),
+				chunks 		= chunkArray( overflow, maxPerFolder )
+			
+			for( let i = 0; i < chunks.length; i++ ) {
+				
+				let cname = ( i === 0 ) ? others : others + ' ' + ( i + 1 )
+				
+				for( let m of chunks[i] ) rewriteMovePath( m, segs.concat( [ cname ] ) )
+				
+				moved = true
+			}
+		}
+		
+		if( moved ) balanced.add( key )
+		
+		return moved
+	}
+	
+	//note(dgmid): sweep deepest-first until stable (a split can change a parent's count)
+	let pass 	= 0,
+		changed = true
+	
+	while( changed && pass < 6 ) {
+		
+		changed = false
+		pass++
+		
+		let counts 		= computeElementCounts(),
+			overflow 	= []
+		
+		let keys = new Set( [ ...counts.bmCount.keys(), ...counts.subMap.keys() ] )
+		
+		for( let key of keys ) {
+			
+			let ec = ( counts.bmCount.get( key ) || 0 ) + ( counts.subMap.get( key ) ? counts.subMap.get( key ).size : 0 )
+			
+			if( ec > threshold ) overflow.push( key )
+		}
+		
+		//note(dgmid): the destination root itself can overflow too ("wall of folders")
+		let rootChildren = new Set()
+		
+		for( let m of moves ) {
+			
+			if( !( m.accepted && m.folderName ) ) continue
+			
+			let segs = m.folderPath || []
+			
+			if( segs.length > 0 ) rootChildren.add( segs[0].toLowerCase() )
+		}
+		
+		if( rootChildren.size > threshold ) overflow.push( '' )
+		
+		//note(dgmid): deepest first, destination root ('') always last
+		overflow.sort( (a,b) => {
+			let da = ( a === '' ) ? -1 : a.split( '/' ).length,
+				db = ( b === '' ) ? -1 : b.split( '/' ).length
+			return db - da
+		})
+		
+		for( let key of overflow ) {
+			
+			//note(dgmid): respect the nesting cap like the AI pass
+			if( key !== '' && key.split( '/' ).length >= MAX_NESTING_DEPTH ) continue
+			
+			if( splitOne( key, counts.display ) ) changed = true
+		}
+	}
+	
+	return balanced.size
+}
+
+
+
+//note(dgmid): process all bookmarks — classify in batches, then build the review list
+
+
+
+//note(dgmid): read the "min bookmarks per new folder" setting (2..4; anything else = off)
+
+function getMinFolderItems() {
+	
+	let v = parseInt( $( '#min-folder-items' ).val() || '0', 10 ) || 0
+	
+	return ( v >= 2 && v <= 4 ) ? v : 0
+}
+
+
+
+//note(dgmid): deterministic guarantee that no NEW folder created by this run ends up
+//with too few bookmarks (the AI is told to avoid it but doesn't always comply). Any new
+//folder with fewer than minItems items merges its bookmarks into the closest sibling
+//under the same parent (fewest-items sibling wins, to keep the tree balanced) or, when
+//no sibling exists, moves them one level up into the parent. Existing folders are always
+//respected. Iterates until stable — a parent that becomes small after a merge-up is
+//handled on the next pass. Runs entirely offline: no extra API calls.
+
+function mergeSmallFolders( minItems ) {
+	
+	if( !minItems || minItems < 2 ) return
+	
+	let changed = true,
+		passes = 0
+	
+	while( changed && passes < 12 ) {
+		
+		changed = false
+		passes++
+		
+		//note(dgmid): group accepted moves by their (lowercased) full path
+		let groups = new Map()
+		
+		for( let m of moves ) {
+			
+			if( !( m.accepted && m.folderName ) || !Array.isArray( m.folderPath ) || m.folderPath.length === 0 ) continue
+			
+			let key = m.folderPath.join( '/' ).toLowerCase()
+			
+			if( !groups.has( key ) ) groups.set( key, { path: m.folderPath.slice(), items: [] } )
+			
+			groups.get( key ).items.push( m )
+		}
+		
+		for( let [ key, g ] of groups ) {
+			
+			//note(dgmid): only folders this run would CREATE (every item is new). The
+			//user's own existing folders with few bookmarks are respected as-is.
+			if( g.items.length >= minItems || !g.items.every( m => m.isNew ) ) continue
+			
+			let parentKey = g.path.length > 1 ? g.path.slice( 0, -1 ).join( '/' ).toLowerCase() : null,
+				siblings = []
+			
+			//note(dgmid): siblings are folders sharing the same parent — for top-level
+			//folders (path length 1) every other top-level folder is a sibling too
+			for( let [ k2, g2 ] of groups ) {
+				
+				if( k2 === key ) continue
+				
+				if( parentKey != null ) {
+					
+					if( g2.path.length > 1 && g2.path.slice( 0, -1 ).join( '/' ).toLowerCase() === parentKey ) {
+						
+						siblings.push( g2 )
+					}
+					
+				} else if( g2.path.length === 1 ) {
+					
+					siblings.push( g2 )
+				}
+			}
+			
+			if( siblings.length > 0 ) {
+				
+				//note(dgmid): merge into the sibling with the fewest items (keeps balance)
+				siblings.sort( ( a, b ) => a.items.length - b.items.length )
+				
+				let target = siblings[0].path
+				
+				for( let m of g.items ) rewriteMovePath( m, target )
+				
+			} else if( parentKey != null ) {
+				
+				//note(dgmid): no sibling → move the items one level up into the parent
+				let parentPath = g.path.slice( 0, -1 )
+				
+				for( let m of g.items ) rewriteMovePath( m, parentPath )
+				
+			} else {
+				
+				//note(dgmid): top-level new folder with no siblings — the bookmark cannot
+				//be represented directly in the destination root, so it stays in place
+				continue
+			}
+			
+			changed = true
+			break
+		}
+	}
+	
+	if( passes > 1 ) {
+		
+		log.info( `[auto-organize] merged small folders (min ${minItems}) — ${passes - 1} pass(es)` )
+	}
+}
+
+
+
+//note(dgmid): normalize a folder name for near-duplicate comparison — lowercase, strip
+//accents, drop connector words (de, y, el, la…) so "Aprendizaje de Idiomas" and
+//"Aprendizaje Idiomas" compare equal. Kept deliberately simple: no stemming, no fuzzy
+//similarity — only the deterministic equivalence the user's examples need.
+
+function normalizeFolderName( name ) {
+	
+	const CONNECTORS = new Set( [ 'de','del','la','las','el','los','un','una','unos','unas','y','e','o','u','en','a','al','para','por','con','sin','sobre','entre','the','of','and','for','to','in','on','at','le','les','des','du','et' ] )
+	
+	return String( name || '' )
+		.toLowerCase()
+		.normalize( 'NFD' ).replace( /[\u0300-\u036f]/g, '' )
+		.split( /[^a-z0-9]+/ )
+		.filter( w => w && !CONNECTORS.has( w ) )
+		.join( ' ' )
+		.trim()
+}
+
+
+
+//note(dgmid): Spanish orthography — the conjunction "y" becomes "e" before words that
+//start with the sound /i/ ("Educación y Idiomas" → "Educación e Idiomas"). Keeps "y"
+//before y-initial words (yate, yerno) and before ia/ie/io/iu (hielo, hiato…). The rule
+//is applied to generated folder names only — never to existing folders.
+
+function spanishYE( s ) {
+	
+	if( typeof s !== 'string' ) return s
+	
+	return s.replace( /\b(y)\s+(\S+)/gi, function( m, y, w ) {
+		
+		if( /^[yY]/.test( w ) ) return m				// "y yate" — keep
+		
+		if( /^(h?i)[aeiou]/i.test( w ) ) return m		// ia/ie/io/iu (hielo, hiato…) — keep
+		
+		if( /^(h?)[iI]/i.test( w ) ) return 'e ' + w		// i-/hi- + consonant — change
+		
+		return m
+	})
+}
+
+
+
+//note(dgmid): deterministic merge of NEAR-DUPLICATE folder names proposed by the AI.
+//The classifier runs in independent 40-bookmark batches and never sees what it named in
+//earlier batches, so the same subject can end up as "Aprendizaje Idiomas" AND
+//"Aprendizaje de Idiomas". This pass groups the accepted moves by (parent, normalized
+//name) and, when several distinct names in the same parent normalize identically,
+//routes every move to the most-populated spelling. Only NEW folders this run would
+//create are touched — existing folders are respected. Runs entirely offline: no extra
+//API calls. Iterates until stable (merging may create a new small folder that then
+//merges again).
+
+function mergeSimilarFolders() {
+	
+	let changed 	= true,
+		passes 		= 0,
+		merged 		= 0
+	
+	while( changed && passes < 12 ) {
+		
+		changed = false
+		passes++
+		
+		//note(dgmid): group accepted moves by parent + normalized leaf name
+		let groups = new Map()
+		
+		for( let m of moves ) {
+			
+			if( !( m.accepted && m.folderName ) || !Array.isArray( m.folderPath ) || m.folderPath.length === 0 ) continue
+			
+			let leaf 		= m.folderPath[ m.folderPath.length - 1 ],
+				parentKey 	= m.folderPath.length > 1 ? m.folderPath.slice( 0, -1 ).join( '/' ).toLowerCase() : '',
+				norm 		= normalizeFolderName( leaf )
+			
+			if( !norm ) continue
+			
+			let key = parentKey + '|' + norm
+			
+			if( !groups.has( key ) ) groups.set( key, { path: m.folderPath.slice(), items: [] } )
+			
+			groups.get( key ).items.push( m )
+		}
+		
+		for( let [ key, g ] of groups ) {
+			
+			//note(dgmid): distinct spellings within the same parent+normalized-name group
+			let byPath = new Map()
+			
+			for( let m of g.items ) {
+				
+				let p = m.folderPath.join( '/' ).toLowerCase()
+				
+				if( !byPath.has( p ) ) byPath.set( p, { path: m.folderPath.slice(), items: [] } )
+				
+				byPath.get( p ).items.push( m )
+			}
+			
+			if( byPath.size < 2 ) continue
+			
+			//note(dgmid): only merge when EVERY variant is a folder this run would create.
+			//If any move targets an existing folder, respect it — the user's own folders
+			//are never absorbed into a new spelling.
+			let anyExisting = false
+			
+			for( let [ , v ] of byPath ) {
+				if( v.items.some( m => !m.isNew ) ) anyExisting = true
+			}
+			
+			if( anyExisting ) continue
+			
+			//note(dgmid): pick the most-populated spelling as the survivor (keeps the
+			//name the AI used most; ties → first seen)
+			let winner = null
+			
+			for( let [ , v ] of byPath ) {
+				if( !winner || v.items.length > winner.items.length ) winner = v
+			}
+			
+			if( !winner ) continue
+			
+			for( let [ , v ] of byPath ) {
+				
+				if( v === winner ) continue
+				
+				for( let m of v.items ) rewriteMovePath( m, winner.path )
+				
+				merged += v.items.length
+				changed = true
+			}
+		}
+	}
+	
+	if( merged > 0 ) {
+		
+		log.info( `[auto-organize] merged near-duplicate folder names — ${merged} bookmark move(s) unified (${passes - 1} pass(es))` )
+	}
+}
+
+
+
+//note(dgmid): which proposed folders (or the destination root) currently exceed the
+//hard limit? Shared by the rebalance rounds and the final guarantee check.
+
+function findOverLimitKeys( maxPerFolder ) {
+	
+	let tol 		= getTolerance( maxPerFolder ),
+		threshold 	= maxPerFolder + tol,
+		counts 		= computeElementCounts(),
+		over 		= []
+	
+	let keys = new Set( [ ...counts.bmCount.keys(), ...counts.subMap.keys() ] )
+	
+	for( let key of keys ) {
+		
+		let ec = ( counts.bmCount.get( key ) || 0 ) + ( counts.subMap.get( key ) ? counts.subMap.get( key ).size : 0 )
+		
+		if( ec > threshold ) over.push( key )
+	}
+	
+	//note(dgmid): the destination root itself can overflow too — hundreds of direct
+	//children under it are the "wall of folders" problem
+	let rootChildren = new Set()
+	
+	for( let m of moves ) {
+		
+		if( !( m.accepted && m.folderName ) ) continue
+		
+		let segs = m.folderPath || []
+		
+		if( segs.length > 0 ) rootChildren.add( segs[0].toLowerCase() )
+	}
+	
+	if( rootChildren.size > threshold ) over.push( '' )
+	
+	return { over: over, threshold: threshold }
+}
+
+
+
+//note(dgmid): is this existing folder name "junk"? Non-descriptive names — leftovers
+//from imports or earlier runs — should NOT be reused as targets: their bookmarks get
+//redistributed into the new structure instead. Detects (a) explicit junk words (misc,
+//mixed, aux, varios, otros, "para ver", uncategorized...), (b) pure TLD/www token
+//names ("com com www www"), and (c) short repeated-token names ("github github com
+//com github", "org kde kde org"). Conservative: descriptive names never match.
+
+function isJunkFolderName( name ) {
+	
+	let n = String( name || '' ).trim()
+	
+	if( !n ) return true
+	
+	let low = n.toLowerCase()
+	
+	if( /(^|[\s\-_.\/])(misc|mixed|aux|varios|otros|miscel[áa]nea|uncategor|sin clasificar|para ver|prueba)([\s\-_.\/]|$)/.test( low ) ) return true
+	
+	let tokens = low.split( /[^a-z0-9]+/ ).filter( Boolean )
+	
+	if( tokens.length < 2 ) return false
+	
+	const TLD = new Set( [ 'com','www','org','net','io','dev','de','es','lv','fr','uk','it','ru','cn','info','gov','edu','app','ai','co','nl','pl','se','no','fi','ee','ca','au','ch','at','be','pt','gr','cz','sk','ro','hu','bg','hr','rs','ua','tr','in','jp','kr','br','mx','ar','cl','pe','uy','pa','bo','ec','ve','eu','me','tv','xyz','top','site','online','shop','store','cloud','pro','biz','name','mobi','asia','cat','tel','club','news','group','live','work','tech','digital','media','social' ] )
+	
+	//note(dgmid): every token is a TLD / www — pure URL-token junk
+	if( tokens.every( t => TLD.has( t ) ) ) return true
+	
+	//note(dgmid): token-frequency checks — machine-generated names repeat their tokens
+	//("github github com com github", "espaa espaa ol ol") while real folder names
+	//rarely do ("React Native" has no repetition; "React React Native" would be junk)
+	let freq = {}
+	
+	for( let t of tokens ) freq[t] = ( freq[t] || 0 ) + 1
+	
+	//note(dgmid): EVERY token appears at least twice — "sanet sanet st st", "ol ol espaa espaa"
+	if( tokens.every( t => freq[t] >= 2 ) ) return true
+	
+	//note(dgmid): a repeated token AND at least one TLD/www token — "github github com
+	//com github", "archlinux archlinux org org"
+	if( tokens.some( t => freq[t] >= 2 ) && tokens.some( t => TLD.has( t ) ) ) return true
+	
+	//note(dgmid): starts with "www" — pure URL token junk ("www ebay gob")
+	if( tokens[0] === 'www' ) return true
+	
+	return false
+}
+
+
+
+//note(dgmid): final guarantee — after every offline pass (merges), check the hard
+//limit again and split whatever is still over it, mechanically if the AI pass is
+//already done. A merge can push a folder back over the limit, so the mechanical
+//split may in turn create a tiny "Otros N" chunk — merge small folders once more.
+
+function ensureWithinLimit( maxPerFolder, minFolderItems ) {
+	
+	if( !maxPerFolder || maxPerFolder < 1 ) return
+	
+	let { over } = findOverLimitKeys( maxPerFolder )
+	
+	if( over.length === 0 ) return
+	
+	let n = mechanicalRebalance( maxPerFolder )
+	
+	if( n > 0 ) {
+		
+		rebalancedMechanical += n
+		
+		log.info( `[auto-organize] post-merge mechanical rebalance — ${n} folder(s) split without AI` )
+		
+		if( minFolderItems >= 2 ) mergeSmallFolders( minFolderItems )
+	}
+}
+
+
+
+function processBookmarks() {
+	
+	processing = true
+	cancelled = false
+	
+	//note(dgmid): a new run invalidates the previous run/apply status markers
+	$('#btn-apply').removeClass( 'done' )
+	setActionStatus( '' )
+	quotaBlocked = false
+	quotaDeadModels = {}
+	unavailableModels = {}
+	moves = []
+	rebalancedMechanical = 0
+	
+	hideQuotaNotice()
+	
+	let config = store.get( 'aiConfig' ) || {}
+	let apiKey = config.apiKey,
+		primaryModel = resolvePrimaryModel( config.model ),
+		maxPerFolder = parseInt( $( '#max-per-folder' ).val() || '0', 10 ) || 0
+	
+	//note(dgmid): optional learned profile — guides the folder-name philosophy
+	let profileId 	= $( '#profile-select' ).val(),
+		profile 	= ( store.get( 'aiProfiles' ) || [] ).find( p => String( p.id ) === String( profileId ) ) || null
+	
+	let bookmarks = workingBookmarks
+	
+	if( bookmarks.length === 0 ) {
+		processing = false
+		return
+	}
+	
+	//note(dgmid): destination — where the new structure is created. When the shared
+	//"consider existing" toggle is on (default), the existing folders of the target
+	//location (destination — or the source itself when they match) are described to
+	//the AI as a guide (names + counts + samples) so they can be reused. When off,
+	//the previous structure is discarded and the AI rebuilds from scratch following
+	//only the selected profile.
+	let dest 			= getDestId(),
+		sourceId 		= ( context && context.folderId != null ) ? context.folderId : -1,
+		considerExisting = store.get( 'aiConsiderExisting' ) !== false
+	
+	let folders = store.get( 'folders' ) || []
+	
+	//note(dgmid): build the reuse guide, then exclude junk / oversized existing folders.
+	//A non-descriptive name (misc-01, "com com www www"…) or a folder far above the
+	//per-folder limit is a hoarder, not a target — the AI must redistribute its
+	//bookmarks into proper folders instead (the empty shell gets deleted afterwards).
+	excludedGuideCount = 0
+	
+	let guide = considerExisting
+		? buildDestinationGuide( folders, dest, context.bookmarks || [], MAX_NESTING_DEPTH )
+		: []
+	
+	if( considerExisting ) {
+		
+		guide = guide.filter( g => {
+			
+			let leaf = String( g.path ).split( '/' ).pop() || ''
+			
+			if( isJunkFolderName( leaf ) ) { excludedGuideCount++; return false }
+			
+			if( maxPerFolder > 0 && g.count > maxPerFolder * 2 ) { excludedGuideCount++; return false }
+			
+			return true
+		})
+	}
+	
+	let existingNames = guide.slice( 0, 60 )
+	
+	//note(dgmid): respect the effective session cap (config value or temporary override)
+	let maxSession = sessionCap
+	let toProcess = bookmarks.slice( 0, maxSession )
+	
+	//note(dgmid): 🔍 DIAGNOSTIC — the effective cap vs the scope
+	log.info( `[auto-organize] run → working=${bookmarks.length} cap=${maxSession} toProcess=${toProcess.length} considerExisting=${considerExisting} dest=${dest} profile=${profile ? profile.id : 'default'} excludedFromGuide=${excludedGuideCount}` )
+	
+	//note(dgmid): chunk the bookmarks into batches (fewer API calls than one-per-bookmark).
+	//40 per call keeps the request count low (~51 calls for 2030 bookmarks instead of 203),
+	//which matters on the free tier's tiny daily quota and speeds up big runs.
+	const BATCH_SIZE = 40
+	apiCallCount = 0	// fresh counter for this run (shown in the results summary)
+	let batches = []
+	for( let i = 0; i < toProcess.length; i += BATCH_SIZE ) {
+		batches.push( toProcess.slice( i, i + BATCH_SIZE ) )
+	}
+	
+	$('#step-start').hide()
+	$('#step-progress').show()
+	$('#btn-start').hide()
+	$('#btn-close').text( i18n.t('autoorg:button.cancel', 'Cancel') )
+	
+	let total = toProcess.length
+	let processed = 0
+	let rawAssignments = []
+	let proposedFolderNames = []	// names invented by earlier batches — fed back so later batches reuse them
+	
+	function processNextBatch() {
+		
+		if( cancelled || quotaBlocked || batches.length === 0 ) {
+			
+			finishClassification()
+			return
+		}
+		
+		let batch = batches.shift()
+		
+		setProgress( processed, total,
+			i18n.t('autoorg:progress.classifying', 'Classifying {{current}} of {{total}} bookmarks…', {
+				current: Math.min( processed + batch.length, total ),
+				total: total
+			})
+		)
+		
+		classifyBatch( batch, existingNames, maxPerFolder, apiKey, primaryModel, profile, proposedFolderNames )
+			.then( assignments => {
+				
+				rawAssignments = rawAssignments.concat( assignments )
+				processed += batch.length
+				
+				//note(dgmid): remember the folder names this batch proposed so the NEXT batch
+				//is told to reuse them (avoids "Aprendizaje Idiomas" vs "Aprendizaje de Idiomas")
+				for( let a of assignments ) {
+					
+					if( !a || !a.folder ) continue
+					
+					let name = String( a.folder ).trim()
+					
+					if( name && !proposedFolderNames.includes( name ) ) proposedFolderNames.push( name )
+				}
+				
+				//note(dgmid): keep the fed-back list bounded — the most recent names matter most
+				if( proposedFolderNames.length > 60 ) proposedFolderNames = proposedFolderNames.slice( -60 )
+				
+				setTimeout( processNextBatch, 300 )
+			})
+			.catch( error => {
+				
+				log.error( `auto-organize batch error: ${error.message}` )
+				processed += batch.length
+				
+				setTimeout( processNextBatch, 300 )
+			})
+	}
+	
+	processNextBatch()
+	
+	//note(dgmid): classification finished — build the review list, then (when a max-per-folder
+	//limit is set) run the rebalance pass for a real guarantee of a balanced tree
+	
+	function finishClassification() {
+		
+		buildMoves( rawAssignments )
+		
+		let maxPerFolder = parseInt( $( '#max-per-folder' ).val() || '0', 10 ) || 0
+		let minFolderItems = getMinFolderItems()
+		
+		if( cancelled || quotaBlocked ) {
+			
+			//note(dgmid): the AI pass was cut short by quota BEFORE rebalance could even
+			//start — still balance whatever is over the soft limit mechanically (by
+			//domain), so the proposal the user reviews already respects the limit.
+			if( !cancelled && quotaBlocked && maxPerFolder > 0 ) {
+				
+				let n = mechanicalRebalance( maxPerFolder )
+				
+				if( n > 0 ) {
+					
+					rebalancedMechanical += n
+					
+					log.info( `[auto-organize] mechanical rebalance (by domain) — ${n} folder(s) split without AI` )
+				}
+			}
+			
+			//note(dgmid): same as the normal path — a mechanical split can leave a tiny
+			//last "Otros N" chunk behind; merge small folders so the proposal is clean
+			if( minFolderItems >= 2 ) mergeSmallFolders( minFolderItems )
+			
+			showResults()
+			return
+		}
+		
+		//note(dgmid): deterministic merge of folders this run would create with too few
+		//bookmarks — before rebalance (AI proposals) and again after (rebalance subfolders)
+		if( minFolderItems >= 2 ) mergeSmallFolders( minFolderItems )
+		
+		//note(dgmid): merge near-duplicate folder names ("Aprendizaje Idiomas" vs
+		//"Aprendizaje de Idiomas") — also before and after rebalance for the same reason
+		mergeSimilarFolders()
+		
+		let accepted = moves.filter( m => m.accepted && m.folderName ).length
+		
+		if( maxPerFolder > 0 && accepted > 0 ) {
+			
+			$('#step-start').hide()
+			$('#step-progress').show()
+			$('#btn-start').hide()
+			$('#btn-close').text( i18n.t('autoorg:button.cancel', 'Cancel') )
+			
+			setProgress( 0, 1, i18n.t('autoorg:progress.rebalancing', 'Rebalancing folders…') )
+			
+			rebalanceMoves( maxPerFolder, config.apiKey, primaryModel, () => {
+				
+				if( minFolderItems >= 2 ) mergeSmallFolders( minFolderItems )
+				mergeSimilarFolders()
+				
+				//note(dgmid): the merge passes can push a folder back over the hard limit —
+				//re-verify and split whatever is still over, mechanically if need be
+				ensureWithinLimit( maxPerFolder, minFolderItems )
+				
+				showResults()
+			})
+			
+		} else {
+			
+			showResults()
+		}
+	}
+}
+
+
+
+//note(dgmid): merge raw assignments with bookmark data, match existing folders case-insensitively
+
+function buildMoves( rawAssignments ) {
+	
+	processing = false
+	
+	let bookmarksToProcess = workingBookmarks.slice( 0, sessionCap )
+	
+	//note(dgmid): id → folder from Gemini
+	let assigned = {}
+	for( let a of rawAssignments ) {
+		if( !( a.id in assigned ) ) assigned[ a.id ] = a.folder
+	}
+	
+	moves = bookmarksToProcess.map( b => {
+		
+		let folderName = assigned[ b.id ] || ''
+		
+		if( !folderName ) {
+			
+			return {
+				id: b.id,
+				title: b.title,
+				url: b.url,
+				folderName: '',
+				folderPath: [],
+				folderId: null,
+				isNew: false,
+				accepted: false
+			}
+		}
+		
+		let resolved = resolveProposedPath( folderName )
+		
+		if( !resolved ) {
+			
+			return {
+				id: b.id,
+				title: b.title,
+				url: b.url,
+				folderName: '',
+				folderPath: [],
+				folderId: null,
+				isNew: false,
+				accepted: false
+			}
+		}
+		
+		return {
+			id: b.id,
+				title: b.title,
+				url: b.url,
+				folderName: folderName,
+				folderPath: resolved.segments,
+				folderId: resolved.id,
+				isNew: ( resolved.created.length > 0 ),			created: resolved.created,
+			accepted: true
+		}
+	})
+	
+	//note(dgmid): unify split reuses — if an existing folder was BOTH reused in place AND
+	//relocated under a new parent (the AI can be inconsistent across batches), route all of
+	//its bookmarks to the relocated location so the folder is never split in two places
+	let existingByName = {}
+	
+	for( let f of ( store.get( 'folders' ) || [] ) ) {
+		
+		let parent = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+		
+		if( parent === getDestId() ) existingByName[ String( f.text ).toLowerCase() ] = f.id
+	}
+	
+	let reuseGroup = {} // existingId -> { inPlace: [], relocated: [] }
+	
+	for( let m of moves ) {
+		
+		if( !( m.accepted && m.folderName ) || m.folderPath.length === 0 ) continue
+		
+		let eid = existingByName[ m.folderPath[ m.folderPath.length - 1 ].toLowerCase() ]
+		
+		if( eid == null ) continue
+		
+		let g = ( reuseGroup[ eid ] = reuseGroup[ eid ] || { inPlace: [], relocated: [] } )
+		
+		if( m.isNew ) g.relocated.push( m )
+		else if( m.folderId === eid ) g.inPlace.push( m )
+	}
+	
+	for( let eid in reuseGroup ) {
+		
+		let g = reuseGroup[ eid ]
+		
+		if( g.inPlace.length === 0 || g.relocated.length === 0 ) continue
+		
+		//note(dgmid): pick the most common relocated path for that folder
+		let byPath = {}
+		
+		for( let relMove of g.relocated ) {
+			
+			let relPath = relMove.folderPath
+			
+			if( !Array.isArray( relPath ) || relPath.length === 0 ) continue
+			
+			let relKey = relPath.join( '/' ).toLowerCase()
+			
+			if( !relKey ) continue
+			
+			if( !byPath[ relKey ] ) byPath[ relKey ] = { path: relPath.slice(), n: 0 }
+			
+			byPath[ relKey ].n++
+		}
+		
+		let best = Object.values( byPath ).sort( (a,b) => b.n - a.n )[0]
+		
+		if( !best || !Array.isArray( best.path ) || best.path.length === 0 ) continue
+		
+		log.info( `[auto-organize] unified ${g.inPlace.length} in-place move(s) for existing folder "${best.path[best.path.length - 1]}" under "${best.path.join( '/' )}"` )
+		
+		for( let m of g.inPlace ) {
+			
+			if( !Array.isArray( m.folderPath ) ) continue
+			
+			rewriteMovePath( m, best.path.concat( m.folderPath.slice( 1 ) ) )
+		}
+	}
+	
+	//note(dgmid): Spanish orthography — "y" → "e" before words starting with i/hi
+	//("Educación y Idiomas" → "Educación e Idiomas"). Applied ONLY to the segments this
+	//run would create; matched existing folders keep their server-side names, so this
+	//can never spawn a near-duplicate of an existing folder.
+	for( let m of moves ) {
+		
+		if( !( m.accepted && m.isNew ) ) continue
+		
+		let path 		= m.folderPath || [],
+			created 	= m.created || []
+		
+		if( created.length === 0 ) continue
+		
+		let prefixLen 	= path.length - created.length,
+			changed 	= false
+		
+		let newTail = created.map( seg => {
+			
+			let fixed = spanishYE( seg )
+			
+			if( fixed !== seg ) changed = true
+			
+			return fixed
+		})
+		
+		if( !changed ) continue
+		
+		rewriteMovePath( m, path.slice( 0, prefixLen ).concat( newTail ) )
+	}
+}
+
+
+
+//note(dgmid): one-line status under the footer buttons — what the last completed
+//step was (run / apply)
+
+function setActionStatus( text ) {
+	
+	$('#action-status').text( text || '' )
+}
+
+
+
+//note(dgmid): show review — grouped by destination folder
+
+function showResults() {
+	
+	//note(dgmid): the results step already carries its own quota summary box — drop the
+	//modal-level banner so it can't linger on screen while the user reviews or applies
+	hideQuotaNotice()
+	
+	$('#step-progress').hide()
+	$('#step-results').show()
+	
+	//note(dgmid): the run just finished — reflect it under the footer buttons
+	setActionStatus( i18n.t( 'autoorg:status.scanned', 'Run complete — review the proposed moves below.' ) )
+	
+	let assignedMoves = moves.filter( m => m.accepted && m.folderName ),
+		newFolderNames = new Set( assignedMoves.filter( m => m.isNew ).map( m => m.folderName.toLowerCase() ) )
+	
+	let summaryHtml = i18n.t('autoorg:summary.proposed', 'Proposed moving <strong>{{moved}}</strong> of {{total}} bookmarks into <strong>{{new}}</strong> new and <strong>{{existing}}</strong> existing folders.', {
+			moved: assignedMoves.length,
+			total: moves.length,
+			new: newFolderNames.size,
+			existing: new Set( assignedMoves.filter( m => !m.isNew ).map( m => m.folderId ) ).size
+		})
+	
+	//note(dgmid): when the run stopped early on API quota, say so clearly and up front —
+	//a partial result (e.g. "20 of 2030") otherwise looks like a per-folder limit kicked in.
+	if( quotaBlocked ) {
+		
+		let eta = pacificMidnightETA()
+		
+		//note(dgmid): distinguish a PARTIAL classification (quota hit while classifying:
+		//some bookmarks were never processed) from a COMPLETE one (all bookmarks were
+		//classified — only the rebalancing pass was cut short, so the proposal is still
+		//valid and can be applied)
+		let left = Math.max( 0, moves.length - assignedMoves.length )
+		
+		summaryHtml = '<div style="margin:8px 0;padding:10px 12px;border-radius:6px;background:#fff3cd;border:1px solid #ffe08a;color:#7a5c00;font-size:12px;line-height:1.5;">' +
+			i18n.t( left > 0 ? 'autoorg:summary.quota_box' : 'autoorg:summary.quota_box_done',
+				left > 0
+					? '⚠ <strong>The run was stopped by the API quota.</strong> Only <strong>{{moved}}</strong> of {{total}} bookmarks were classified — the remaining <strong>{{left}}</strong> were NOT processed and remain untouched on the server. The quota resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window — nothing else has been changed.'
+					: '⚠ <strong>Classification finished ({{moved}} of {{total}} bookmarks), but the rebalancing pass was stopped by the API quota.</strong> The proposal below is complete — you can still apply it. Nothing has been changed on the server yet.',
+				{
+					moved: assignedMoves.length,
+					total: moves.length,
+					left: left,
+					hours: eta.hours,
+					minutes: eta.minutes
+				}) +
+			'</div>' + summaryHtml
+	}
+	
+	//note(dgmid): when the no-AI (by-domain) fallback balanced folders, say so — the
+	//user should know those subfolders are grouped by website, not by topic
+	if( rebalancedMechanical > 0 ) {
+		
+		summaryHtml = '<div style="margin:8px 0;padding:10px 12px;border-radius:6px;background:#d1ecf1;border:1px solid #bee5eb;color:#0c5460;font-size:12px;line-height:1.5;">' +
+			i18n.t( 'autoorg:summary.mechanical', 'ℹ The AI rebalancing pass was cut short, so <strong>{{count}}</strong> overfull folder(s) were balanced without AI (grouped by website/domain).', { count: rebalancedMechanical } ) +
+			'</div>' + summaryHtml
+	}
+	
+	//note(dgmid): tell the user which existing folders were NOT reused (junk names /
+	//oversized) and that their bookmarks were redistributed instead
+	if( excludedGuideCount > 0 ) {
+		
+		summaryHtml = '<div style="margin:8px 0;padding:10px 12px;border-radius:6px;background:#d1ecf1;border:1px solid #bee5eb;color:#0c5460;font-size:12px;line-height:1.5;">' +
+			i18n.t( 'autoorg:summary.excluded', 'ℹ <strong>{{count}}</strong> existing folder(s) with non-descriptive names or far over the size limit were NOT reused — their bookmarks were redistributed into the new structure.', { count: excludedGuideCount } ) +
+			'</div>' + summaryHtml
+	}
+	
+	//note(dgmid): show how many API calls the run actually made — explains on the spot
+	//why a free-tier run can stop early (small daily quota, ~20 requests/minute)
+	summaryHtml += '<div style="font-size:11px;opacity:.75;margin-top:8px;">' +
+		( quotaBlocked
+			? i18n.t('autoorg:summary.api_calls_stopped', 'This run made <strong>{{n}}</strong> API calls before the API quota stopped it.', { n: apiCallCount })
+			: i18n.t('autoorg:summary.api_calls', 'This run made <strong>{{n}}</strong> API calls.', { n: apiCallCount })
+		) +
+		'</div>'
+	
+	$('#summary-stats').html( summaryHtml )
+	
+	//note(dgmid): group by folder name, preserving first-seen order
+	let groups = []
+	let groupByName = {}
+	
+	for( let m of assignedMoves ) {
+		
+		let key = m.folderName.toLowerCase()
+		
+		if( !( key in groupByName ) ) {
+			
+			groupByName[ key ] = groups.length
+			groups.push( {
+				name: m.folderName,
+				isNew: m.isNew,
+				items: []
+			} )
+		}
+		
+		groups[ groupByName[ key ] ].items.push( m )
+	}
+	
+	//note(dgmid): unassigned bookmarks at the end
+	let unassigned = moves.filter( m => !m.folderName )
+	
+	//note(dgmid): 🔍 DIAGNOSTIC — how many got assigned, and which were left behind
+	log.info( `[auto-organize] results → total=${moves.length} assigned=${assignedMoves.length} unassigned=${unassigned.length} newFolders=${newFolderNames.size}` )
+	if( unassigned.length > 0 ) {
+		log.info( `[auto-organize] unassigned sample → ${unassigned.slice( 0, 10 ).map( m => m.title ).join( ' | ' )}` )
+	}
+	
+	let $list = $('#results-list').empty()
+	
+	if( groups.length === 0 ) {
+		
+		$list.html( `<div class="empty-state">` + i18n.t('autoorg:results.empty', 'No moves were proposed.') + `</div>` )
+		
+	} else {
+		
+		for( let g of groups ) {
+			
+			let newBadge = g.isNew
+				? `<span class="new-badge">` + i18n.t('autoorg:results.new', 'NEW') + `</span>`
+				: ''
+			
+			let itemsHtml = g.items.map( (m, i) => `
+				<div class="move-item" data-group="${groupByName[ g.name.toLowerCase() ]}" data-item="${i}">
+					<span class="move-check">☑</span>
+					<span class="move-title">${String(m.title || '(untitled)').substring(0, 80)}</span>
+				</div>
+			`).join('')
+			
+			$list.append(`
+				<div class="folder-group">
+					<div class="group-header">
+						<span class="group-icon">📁</span>
+						<span class="group-name">${g.name}</span>
+						${newBadge}
+						<span class="group-count">${g.items.length}</span>
+					</div>
+					<div class="group-items">${itemsHtml}</div>
+				</div>
+			`)
+		}
+		
+		if( unassigned.length > 0 ) {
+			
+			$list.append(`
+				<div class="folder-group" style="opacity:.6;">
+					<div class="group-header">
+						<span class="group-icon">❓</span>
+						<span class="group-name">` + i18n.t('autoorg:results.unassigned', 'Unassigned') + `</span>
+						<span class="group-count">${unassigned.length}</span>
+					</div>
+					<div class="group-items">` +
+						unassigned.map( m => `
+							<div class="move-item rejected">
+								<span class="move-check">☐</span>
+								<span class="move-title">${String(m.title || '(untitled)').substring(0, 80)}</span>
+							</div>
+						`).join('') +
+					`</div>
+				</div>
+			`)
+		}
+	}
+	
+	//note(dgmid): store group data on the elements for toggling
+	$('#results-list .move-item').each( function() {
+		
+		let gIdx = parseInt( $(this).data( 'group' ), 10 ),
+			iIdx = parseInt( $(this).data( 'item' ), 10 )
+		
+		if( groups[ gIdx ] && groups[ gIdx ].items[ iIdx ] ) {
+			$(this).data( 'move', groups[ gIdx ].items[ iIdx ] )
+		}
+	})
+	
+	$('#btn-accept-all').show()
+	$('#btn-apply').show()
+	$('#btn-close').text( i18n.t('autoorg:button.close', 'Close') )
+}
+
+
+
+//note(dgmid): toggle individual move acceptance
+
+$('#results-list').on('click', '.move-item', function() {
+	
+	let move = $(this).data( 'move' )
+	
+	if( !move ) return
+	
+	move.accepted = !move.accepted
+	
+	$(this).toggleClass( 'rejected' )
+	$(this).find('.move-check').text( move.accepted ? '☑' : '☐' )
+})
+
+
+
+//note(dgmid): accept all
+
+$('#btn-accept-all').click( function() {
+	
+	moves.forEach( m => {
+		if( m.folderName ) m.accepted = true
+	})
+	
+	$('#results-list .move-item').each( function() {
+		if( $(this).data( 'move' ) && $(this).data( 'move' ).folderName ) {
+			$(this).removeClass( 'rejected' )
+			$(this).find('.move-check').text( '☑' )
+		}
+	})
+	
+	let $btn = $(this)
+	let origText = $btn.text()
+	$btn.text( '✓ ' + origText ).css('background', 'var(--accent)').prop('disabled', true)
+	setTimeout( () => {
+		$btn.text( origText ).css('background', '').prop('disabled', false)
+	}, 800 )
+})
+
+
+
+	//note(dgmid): optional cleanup — delete folders that the reorganization left empty.
+	//A folder is a candidate when its ENTIRE subtree (recursively) holds zero bookmarks
+	//on the server AND it lies inside the area this run touched: the source subtree, the
+	//destination subtree, or anywhere at all when the source was Home/All bookmarks.
+	//Folders that held moved bookmarks are eligible wherever they are. Home and the
+	//destination folder are never touched. Requires explicit confirmation.
+	
+	function deleteEmptyFolders( applyList, callback, standalone ) {
+		
+		//note(dgmid): every folder that held at least one moved bookmark before the run
+		let affected = new Set()
+		
+		for( let m of applyList ) {
+			
+			let bm = ( context.bookmarks || [] ).find( b => b.id === m.id )
+			
+			if( bm && Array.isArray( bm.folders ) ) {
+				
+				for( let fid of bm.folders ) {
+					if( fid !== -1 && fid !== getDestId() ) affected.add( fid )
+				}
+			}
+		}
+		
+		//note(dgmid): the area this run could have emptied — the source and destination
+		//subtrees. An empty scopeIds means the whole tree was in play (source was
+		//Home/All bookmarks), so every empty folder anywhere becomes a candidate.
+		//The subtreeHadBookmarks gate below keeps intentional always-empty folders
+		//(e.g. a browser-sync staging folder) safe during that whole-tree sweep.
+		let sourceId 	= ( context && context.folderId != null ) ? context.folderId : -1,
+			destId 		= getDestId(),
+			foldersNow 	= store.get( 'folders' ) || [],
+			scopeIds 	= new Set()
+		
+		if( sourceId !== -1 ) {
+			
+			scopeIds.add( sourceId )
+			for( let id of getDescendantIds( foldersNow, sourceId ) ) scopeIds.add( id )
+			
+			if( destId !== -1 && destId !== sourceId ) {
+				scopeIds.add( destId )
+				for( let id of getDescendantIds( foldersNow, destId ) ) scopeIds.add( id )
+			}
+		}
+		
+		fetchApi.bookmarksApi( 'folders', '', '', function() {
+			
+			let folders = store.get( 'folders' ) || []
+			
+			fetchApi.bookmarksApi( 'all', '', '', function( array ) {
+				
+				if( !Array.isArray( array ) ) { callback( { deleted: 0 } ); return }
+				
+				//note(dgmid): fresh bookmark counts per folder (server truth)
+				let counts = new Map()
+				
+				for( let b of array ) {
+					for( let fid of ( b.folders || [] ) ) {
+						if( fid !== -1 ) counts.set( fid, ( counts.get( fid ) || 0 ) + 1 )
+					}
+				}
+				
+				//note(dgmid): parent → children map for descendant checks
+				let byParent = new Map()
+				
+				for( let f of folders ) {
+					let p = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+					if( !byParent.has( p ) ) byParent.set( p, [] )
+					byParent.get( p ).push( f )
+				}
+				
+				function hasBookmarkDescendant( id ) {
+					
+					for( let c of ( byParent.get( id ) || [] ) ) {
+						if( ( counts.get( c.id ) || 0 ) > 0 ) return true
+						if( hasBookmarkDescendant( c.id ) ) return true
+					}
+					return false
+				}
+				
+				//note(dgmid): folders that held bookmarks BEFORE this run (pre-run snapshot).
+				//Used so the sweep never proposes always-empty folders (e.g. a staging folder
+				//for browser sync) even when the whole tree is in scope.
+				let hadBookmarks = new Set()
+				
+				for( let b of ( context.bookmarks || [] ) ) {
+					for( let fid of ( b.folders || [] ) ) {
+						if( fid !== -1 ) hadBookmarks.add( fid )
+					}
+				}
+				
+				function subtreeHadBookmarks( id ) {
+					
+					if( hadBookmarks.has( id ) ) return true
+					
+					for( let c of ( byParent.get( id ) || [] ) ) {
+						if( subtreeHadBookmarks( c.id ) ) return true
+					}
+					return false
+				}
+				
+				//note(dgmid): candidates — empty of bookmarks, no descendant holds bookmarks
+				//(so deleting them loses nothing), not Home/destination, and reachable from
+				//this run's area (or held moved bookmarks, or the whole tree was in scope).
+				//Folders whose subtree never held bookmarks are never proposed, even during
+				//a whole-tree sweep.
+				let deletable = folders.filter( f => {
+					
+					if( f.id === -1 || f.id === destId ) return false
+					if( isFolderAncestor( folders, f.id, destId ) ) return false
+					if( ( counts.get( f.id ) || 0 ) > 0 ) return false
+					if( hasBookmarkDescendant( f.id ) ) return false
+					
+					if( affected.has( f.id ) ) return true
+					
+					//note(dgmid): inside the area this run touched, ANY branch whose whole
+					//subtree is now empty (fresh server truth) is a leftover skeleton —
+					//including folders emptied by an EARLIER run (those aren't in the
+					//pre-run snapshot, so subtreeHadBookmarks would wrongly exclude them).
+					//The subtreeHadBookmarks gate only protects intentional always-empty
+					//folders during a whole-tree sweep (source was Home/All).
+					if( scopeIds.size === 0 ) return subtreeHadBookmarks( f.id )
+					
+					return scopeIds.has( f.id )
+				})
+				
+				//note(dgmid): 🔍 DIAGNOSTIC — what the cleanup found
+				log.info( `[auto-organize] cleanup → affected=${affected.size} scope=${scopeIds.size === 0 ? 'all' : scopeIds.size + ' folders'} deletable=${deletable.length}` )
+				
+				if( deletable.length === 0 ) { callback( { deleted: 0 } ); return }
+				
+				//note(dgmid): deepest-first ordering
+				let depth = new Map()
+				
+				function setDepth( id, d ) {
+					depth.set( id, d )
+					for( let c of ( byParent.get( id ) || [] ) ) setDepth( c.id, d + 1 )
+				}
+				setDepth( -1, 0 )
+				
+				deletable.sort( (a,b) => ( depth.get( b.id ) || 0 ) - ( depth.get( a.id ) || 0 ) )
+				
+				let names = deletable.slice( 0, 30 ).map( f => '• ' + f.text ).join( '\n' )
+				if( deletable.length > 30 ) names += '\n…'
+				
+				let response = ipcRenderer.sendSync('show-message-box', {
+					message: standalone
+						? i18n.t('autoorg:dialog.emptyfolders.message_standalone', 'Found {{count}} empty folder(s). Delete them?', { count: deletable.length })
+						: i18n.t('autoorg:dialog.emptyfolders.message', 'The reorganization left {{count}} empty folder(s). Delete them?', { count: deletable.length }),
+					detail: names + '\n\n' + i18n.t('autoorg:dialog.emptyfolders.note', 'Note: any empty subfolders nested inside these will also be removed.'),
+					buttons: [
+						i18n.t('autoorg:dialog.emptyfolders.confirm', 'Delete Empty Folders'),
+						i18n.t('autoorg:dialog.emptyfolders.cancel', 'Cancel')
+					]
+				})
+				
+				if( response !== 0 ) { callback( { deleted: 0 } ); return }
+				
+				let deleted 	= 0,
+					ci 			= 0
+				
+				function deleteNext() {
+					
+					if( cancelled || ci >= deletable.length ) { callback( { deleted } ); return }
+					
+					setProgress( ci + 1, deletable.length,
+						i18n.t('autoorg:progress.deleting', 'Deleting empty folder {{current}} of {{total}}', {
+							current: ci + 1,
+							total: deletable.length
+						})
+					)
+					
+					fetchApi.bookmarksApi( 'deletefolder', deletable[ci].id, '', function() {
+						
+						deleted++
+						ci++
+						setTimeout( deleteNext, 200 )
+					})
+				}
+				
+				deleteNext()
+			})
+		})
+	}
+//note(dgmid): apply accepted moves to the server — create new folders, then move bookmarks
+
+$('#btn-apply').click( function() {
+	
+	let toApply = moves.filter( m => m.accepted && m.folderName )
+	
+	if( toApply.length === 0 ) {
+		
+		ipcRenderer.send('show-error-box', {
+			title: i18n.t('autoorg:error.nomoves_title', 'No Moves to Apply'),
+			content: i18n.t('autoorg:error.nomoves_content', 'No bookmarks have accepted moves. Toggle moves or use Accept All first.')
+		})
+		return
+	}
+	
+	applying = true
+	cancelled = false
+	
+	//note(dgmid): the user is now executing the moves — the quota banner must not stay up
+	hideQuotaNotice()
+	
+	$('#btn-apply').prop('disabled', true).text( i18n.t('autoorg:button.applying', 'Applying…') )
+	$('#step-results').hide()
+	$('#step-progress').show()
+	
+	//note(dgmid): dedupe new folder paths (case-insensitive, full path), keep first-seen casing.
+	//A path may be "Parent/Child" when nesting was proposed — segments are created in order.
+	let newFolderPaths = []
+	let seen = new Set()
+	
+	for( let m of toApply ) {
+		
+		if( !m.isNew ) continue
+		
+		let key = m.folderPath.join( '/' ).toLowerCase()
+		
+		if( !seen.has( key ) ) {
+			seen.add( key )
+			newFolderPaths.push( m.folderPath )
+		}
+	}
+	
+	//note(dgmid): map full path (lowercased, "parent/child") → deepest created folder id,
+	//plus a "parentId|name" lookup so shared ancestors (e.g. ULPGC) are only created once
+	let newFolderIds 	= {},
+		createdIds 		= {},
+		movedCount 		= 0,
+		skippedCount 	= 0
+	
+	createFolderPaths( 0 )
+	
+	//note(dgmid): parse the created folder id from the addfolder response
+	
+	function parseCreatedFolderId( message ) {
+		
+		try {
+			
+			let doc = JSON.parse( message )
+			
+			return ( doc && doc.item && doc.item.id ) ? doc.item.id
+				: ( doc && doc.data && doc.data.id ) ? doc.data.id
+				: ( doc && doc.id ) ? doc.id
+				: null
+			
+		} catch( e ) {
+			
+			return null
+		}
+	}
+	
+	//note(dgmid): create every missing segment of a path in order, reusing folders that
+	//already exist on the server (or were created earlier in this run)
+	
+	function createPathSegments( path, segIndex, parentId, callback ) {
+		
+		if( segIndex >= path.length ) { callback( parentId ); return }
+		
+		let name 	= path[segIndex],
+			key 	= `${parentId}|${name.toLowerCase()}`
+		
+		if( createdIds[ key ] != null ) {
+			
+			createPathSegments( path, segIndex + 1, createdIds[ key ], callback )
+			return
+		}
+		
+		//note(dgmid): does this segment already exist under parentId?
+		let existing = ( store.get( 'folders' ) || [] ).find( f => {
+			
+			let parent = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+			
+			return parent === parentId && String( f.text ).toLowerCase() === name.toLowerCase()
+		})
+		
+		if( existing ) {
+			
+			createdIds[ key ] = existing.id
+			createPathSegments( path, segIndex + 1, existing.id, callback )
+			return
+		}
+		
+		let data = serialize.serialize({
+			'title': name,
+			'parent_folder': parentId
+		})
+		
+		fetchApi.bookmarksApi( 'addfolder', '', data, function( message ) {
+			
+			let newId = parseCreatedFolderId( message )
+			
+			if( newId != null ) {
+				
+				createdIds[ key ] = newId
+				createPathSegments( path, segIndex + 1, newId, callback )
+				
+			} else {
+				
+				log.error( `auto-organize: could not read id for created folder "${name}"` )
+				callback( null )
+			}
+		})
+	}
+	
+	function createFolderPaths( ci ) {
+		
+		if( cancelled ) { finishApply( false ); return }
+		
+		if( ci >= newFolderPaths.length ) {
+			
+			resolveMissingFolderIds( () => moveBookmarks( 0, toApply ) )
+			return
+		}
+		
+		let path = newFolderPaths[ci]
+		
+		setProgress( ci, newFolderPaths.length,
+			i18n.t('autoorg:progress.creating', 'Creating folder {{current}} of {{total}}: {{name}}', {
+				current: ci + 1,
+				total: newFolderPaths.length,
+				name: path.join( '/' ).substring( 0, 40 )
+			})
+		)
+		
+		createPathSegments( path, 0, getDestId(), function( deepestId ) {
+			
+			if( deepestId != null ) {
+				newFolderIds[ path.join( '/' ).toLowerCase() ] = deepestId
+			}
+			
+			setTimeout( () => createFolderPaths( ci + 1 ), 200 )
+		})
+	}
+	
+	//note(dgmid): fallback for any path whose deepest id could not be resolved — refetch
+	//the folder list and walk the path again (same data the app keeps in the store)
+	
+	function resolveMissingFolderIds( callback ) {
+		
+		let missing = newFolderPaths.filter( p => !( p.join( '/' ).toLowerCase() in newFolderIds ) )
+		
+		if( missing.length === 0 ) {
+			callback()
+			return
+		}
+		
+		fetchApi.bookmarksApi( 'folders', '', '', function() {
+			
+			let folders = store.get( 'folders' ) || []
+			
+			for( let p of missing ) {
+				
+			let parentId 	= getDestId(),
+				ok 			= true
+				
+				for( let name of p ) {
+					
+					let f = folders.find( x => {
+						
+						let parent = ( x.parent_folder == null || x.parent_folder === -1 || x.parent_folder === '-1' ) ? -1 : x.parent_folder
+						
+						return parent === parentId && String( x.text ).toLowerCase() === name.toLowerCase()
+					})
+					
+					if( f ) {
+						
+						parentId = f.id
+						
+					} else {
+						
+						ok = false
+						break
+					}
+				}
+				
+				if( ok ) {
+					newFolderIds[ p.join( '/' ).toLowerCase() ] = parentId
+				}
+			}
+			
+			callback()
+		})
+	}
+	
+	function moveBookmarks( mi, list ) {
+		
+		if( cancelled ) { finishApply( false ); return }
+		
+		if( mi >= list.length ) {
+			
+			//note(dgmid): single summary instead of one log line per skipped bookmark
+			if( skippedCount > 0 ) {
+				log.warn( `auto-organize: apply finished — ${movedCount} moved, ${skippedCount} skipped (no destination folder / modify failed)` )
+			}
+			
+			finishApply( true )
+			return
+		}
+		
+		let m = list[mi],
+			destId = m.isNew ? ( newFolderIds[ m.folderPath.join( '/' ).toLowerCase() ] ?? null ) : m.folderId
+		
+		setProgress( mi + 1, list.length,
+			i18n.t('autoorg:progress.moving', 'Moving bookmark {{current}} of {{total}}', {
+				current: mi + 1,
+				total: list.length
+			})
+		)
+		
+		//note(dgmid): if the folder failed to be created, skip this bookmark
+		//(counted in the single summary at the end of the apply loop, no per-bookmark log)
+		if( destId == null ) {
+			
+			skippedCount++
+			setTimeout( () => moveBookmarks( mi + 1, list ), 100 )
+			return
+		}
+		
+		let data = '?record_id=' + m.id + '&folders[]=' + destId
+		
+		//note(dgmid): transient network failures (laptop sleep, Wi-Fi drop) used to
+		//permanently skip the bookmark — retry a couple of times with backoff first
+		fetchApi.modifyWithRetry( m.id, data, 2, function( response ) {
+			
+			if( response !== null ) {
+				movedCount++
+			} else {
+				//note(dgmid): counted in the single summary at the end of the apply loop, no per-bookmark log
+				skippedCount++
+			}
+			
+			setTimeout( () => moveBookmarks( mi + 1, list ), 200 )
+		})
+	}
+	
+	
+	function finishApply( success ) {
+		
+		applying = false
+		
+		$('#btn-apply').prop('disabled', false).text( i18n.t('autoorg:button.apply', 'Apply to Server') )
+		
+		//note(dgmid): mark the apply step as done only when it really applied
+		if( success ) {
+			
+			$('#btn-apply').addClass( 'done' )
+			setActionStatus( i18n.t( 'autoorg:status.applied', 'Moves applied to the server ({{count}} bookmarks).', { count: movedCount } ) )
+			
+		} else {
+			
+			$('#btn-apply').removeClass( 'done' )
+			setActionStatus( i18n.t( 'autoorg:status.cancelled', 'Operation cancelled — no changes were applied.' ) )
+		}
+		
+		let msg = success
+			? i18n.t('autoorg:done.applied', 'Applied moves to {{count}} bookmarks.', { count: movedCount })
+			: i18n.t('autoorg:done.cancelled', 'Operation cancelled.')
+		
+		if( success && skippedCount > 0 ) {
+			msg += ' ' + i18n.t('autoorg:done.skipped', '{{skipped}} skipped.', { skipped: skippedCount })
+		}
+		
+		if( success && $( '#chk-delete-empty' ).is( ':checked' ) ) {
+			
+			$('#btn-close').text( i18n.t('autoorg:button.close', 'Close') )
+			
+			deleteEmptyFolders( toApply, function( info ) {
+				
+				if( info && info.deleted > 0 ) {
+					msg += ' ' + i18n.t('autoorg:done.emptied', '{{deleted}} empty folders removed.', { deleted: info.deleted })
+				}
+				
+				ipcRenderer.send('show-error-box', {
+					title: i18n.t('autoorg:done.title', 'Auto-Organize Complete'),
+					content: msg
+				})
+				
+				//note(dgmid): refresh bookmarks — send to 'refresh' channel (main.js forwards to main window)
+				ipcRenderer.send( 'refresh', 'refresh-bookmarks' )
+			})
+			
+			return
+		}
+		
+		ipcRenderer.send('show-error-box', {
+			title: success ? i18n.t('autoorg:done.title', 'Auto-Organize Complete') : i18n.t('autoorg:done.title_cancel', 'Auto-Organize Cancelled'),
+			content: msg
+		})
+		
+		//note(dgmid): refresh bookmarks — send to 'refresh' channel (main.js forwards to main window)
+		ipcRenderer.send( 'refresh', 'refresh-bookmarks' )
+		
+		$('#btn-close').text( i18n.t('autoorg:button.close', 'Close') )
+	}
+})
+
+
+
+//note(dgmid): start button
+
+$('#btn-start').click( function() {
+	
+	processBookmarks()
+})
+
+
+
+//note(dgmid): standalone cleanup — scan the current scope for folders left empty by
+//EARLIER runs (e.g. an interrupted cleanup) and offer to delete them. No AI needed:
+//it runs the same deleteEmptyFolders sweep with an empty move list, so the whole
+//folder subtree of the current context becomes the candidate area.
+
+$('#btn-clean-empty').click( function() {
+	
+	if( processing || applying ) return
+	
+	//note(dgmid): a cancelled run leaves `cancelled` true — reset it or the delete
+	//loop would abort immediately after the confirm dialog and delete nothing
+	cancelled = false
+	
+	if( !context || !context.folderId ) {
+		
+		ipcRenderer.send('show-error-box', {
+			title: i18n.t('autoorg:error.nocontext_title', 'No Folder Selected'),
+			content: i18n.t('autoorg:error.nocontext_content', 'Open this window from a folder in the main window first.')
+		})
+		return
+	}
+	
+	$('#btn-clean-empty').prop('disabled', true)
+	
+	$('#step-start').hide()
+	$('#step-progress').show()
+	
+	setProgress( 0, 1, i18n.t('autoorg:progress.scanning', 'Scanning for empty folders…') )
+	
+	deleteEmptyFolders( [], function( info ) {
+		
+		$('#btn-clean-empty').prop('disabled', false)
+		
+		$('#step-progress').hide()
+		$('#step-start').show()
+		
+		let msg = ( info && info.deleted > 0 )
+			? i18n.t('autoorg:done.emptied', '{{deleted}} empty folders removed.', { deleted: info.deleted })
+			: i18n.t('autoorg:done.noempty', 'No empty folders were found in this scope.')
+		
+		ipcRenderer.send('show-error-box', {
+			title: i18n.t('autoorg:done.title_clean', 'Clean Up Empty Folders'),
+			content: msg
+		})
+		
+		//note(dgmid): refresh bookmarks — send to 'refresh' channel (main.js forwards to main window)
+		ipcRenderer.send( 'refresh', 'refresh-bookmarks' )
+	}, true )
+})
+
+
+
+//note(dgmid): close / cancel button
+
+$('#btn-close').click( function() {
+	
+	if( processing || applying ) {
+		
+		cancelled = true
+	}
+	
+	ipcRenderer.send( 'close-current-window' )
+})

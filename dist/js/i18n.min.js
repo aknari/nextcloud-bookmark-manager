@@ -2,8 +2,26 @@
 
 const i18n = require( 'i18next' )
 const i18nextBackend = require( 'i18next-sync-fs-backend' )
-const LanguageDetector = require( 'i18next-electron-language-detector' )
 const path = require( 'path' )
+
+// Custom language detector (i18next-electron-language-detector requires app from renderer, which doesn't work in modern Electron)
+const LanguageDetector = {
+	type: 'languageDetector',
+	detect: () => {
+		// Renderer: use navigator.language / Main: use app.getLocale()
+		if( typeof navigator !== 'undefined' && navigator.language ) {
+			return navigator.language
+		}
+		try {
+			const { app } = require( 'electron' )
+			return app.getLocale()
+		} catch( e ) {
+			return 'en'
+		}
+	},
+	init: () => {},
+	cacheUserLanguage: () => {}
+}
 
 
 const i18nextOptions = {
@@ -16,17 +34,26 @@ const i18nextOptions = {
 		'addbookmark',
 		'addfolder',
 		'bookmarktable',
+		'checkbroken',
 		'date',
 		'editbookmark',
+		'editfolder',
 		'edittag',
 		'export',
 		'favicons',
 		'fetch',
+		'findduplicates',
+		'import',
 		'login',
 		'menu',
 		'menusidebar',
 		'menutable',
-		'version'
+		'version',
+		'autoorg',
+		'autotag',
+		'aiconfig',
+		'learn',
+		'repairtitles'
 		],
 	defaultNS: 'app',
 	backend:{

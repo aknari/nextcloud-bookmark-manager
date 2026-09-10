@@ -1,0 +1,72 @@
+{
+  "header": "Auto-Etichetta Segnalibri",
+  "button": {
+    "start": "Avvia",
+    "acceptall": "Accetta tutte",
+    "apply": "Applica al server",
+    "applying": "Applicazione…",
+    "applying_progress": "Applicazione… {{current}}/{{total}}",
+    "close": "Chiudi",
+    "cancelling": "Annullamento…"
+  },
+  "label": {
+    "model": "Modello IA",
+    "maxtags": "Max etichette per segnalibro",
+    "maxsession": "Max elementi da elaborare",
+    "selectedbm": "Segnalibri selezionati",
+    "selected_count": "{{selected}} segnalibri selezionati",
+    "none_selected": "Nessuno selezionato — seleziona i segnalibri (Ctrl+Click) o una cartella",
+    "cleartags": "Cancella prima le etichette esistenti",
+    "consider_existing": "Considera le etichette esistenti (riutilizza il mio vocabolario)",
+    "profile": "Profilo di etichettatura",
+    "noprofile": "Nessuno (l'IA decide liberamente)",
+    "defaultprofile": "Predefinito (integrato)",
+    "notagsuffix": " (senza etichette)",
+    "profilepreview_none": "(nessuna etichetta in questo profilo)",
+    "folder": "Cartella da etichettare",
+    "bookmarks": "Segnalibri nella cartella",
+    "includesub": "Includi i segnalibri delle sottocartelle",
+    "capnotice": "Questa esecuzione elaborerà solo <strong>{{cap}}</strong> di <strong>{{total}}</strong> segnalibri (limite sessione IA).",
+    "overridecap": "Elabora tutti per questa esecuzione (temporaneo)",
+    "nofolder": "Nessun segnalibro trovato in questa cartella — seleziona prima i segnalibri o una cartella"
+  },
+  "hint": {
+    "profile": "Opzionale: preferisci le etichette del vocabolario di un profilo appreso",
+    "consider_existing": "L'IA può riutilizzare le etichette che già usi invece di inventarne di nuove"
+  },
+  "error": {
+    "noconfig": "Nessuna configurazione AI trovata. Vai su Segnalibri > Impostazioni IA per configurare prima la tua API key.",
+    "notable": "Errore: impossibile accedere alla tabella dei segnalibri.",
+    "noselected": "Nessun segnalibro selezionato. Seleziona prima i segnalibri (Ctrl+Click o Shift+Click).",
+    "nobookmarks": "Nessun segnalibro trovato da elaborare.",
+    "notags_title": "Nessuna etichetta da applicare",
+    "notags_content": "Nessun segnalibro ha etichette accettate. Attiva le etichette o usa Accetta tutte."
+  },
+  "progress": {
+    "starting": "Avvio…",
+    "processing": "Elaborazione {{current}} di {{total}}: {{title}}",
+    "quota": "Quota API raggiunta — nuovo tentativo tra {{wait}}s…",
+    "quota_minute_title": "Quota API raggiunta — nuovo tentativo automatico",
+    "quota_minute": "Raggiunto il limite al minuto dell'API. Nuovo tentativo tra <strong>{{wait}}s</strong> (tentativo {{attempt}} di {{max}}). Puoi lasciare aperta questa finestra — proseguirà da sola.",
+    "quota_daily_title": "Quota giornaliera API raggiunta",
+    "quota_daily": "La quota giornaliera gratuita è esaurita. Si azzera a mezzanotte, ora del Pacifico (tra circa <strong>{{hours}}h {{minutes}}m</strong>). Puoi chiudere questa finestra con tranquillità — non è stato modificato nulla e nessun segnalibro è andato perso.",
+    "quota_stopped_title": "Esecuzione interrotta — quota API esaurita",
+    "quota_stopped": "L'esecuzione è stata interrotta perché la quota dell'API è ancora esaurita dopo diversi tentativi. Quasi certamente è il limite giornaliero — si azzera a mezzanotte, ora del Pacifico (tra circa <strong>{{hours}}h {{minutes}}m</strong>). Puoi chiudere questa finestra con tranquillità — non è stato modificato nulla e nessun segnalibro è andato perso."
+  },
+  "summary": {
+    "processed": "Elaborati <strong>{{total}}</strong> segnalibri. <strong>{{accepted}}</strong> hanno etichette suggerite ({{tags}} etichette in totale).",
+    "quota_box": "⚠ <strong>L'esecuzione è stata interrotta a causa della quota API.</strong> Solo <strong>{{processed}}</strong> di {{total}} segnalibri sono stati elaborati — i rimanenti <strong>{{left}}</strong> NON sono stati elaborati e conservano le etichette attuali. La quota si azzera a mezzanotte, ora del Pacifico (tra circa <strong>{{hours}}h {{minutes}}m</strong>). Puoi chiudere questa finestra — non è stato modificato altro."
+  },
+  "results": {
+    "empty": "Nessun segnalibro elaborato.",
+    "error": "Errore: {{error}}",
+    "notags": "Nessuna etichetta pertinente trovata",
+    "quotaerror": "Quota API raggiunta — esecuzione interrotta",
+    "clicktoggle": "Clic per attivare/disattivare"
+  },
+  "done": {
+    "title": "Auto-Etichettatura completata",
+    "applied": "Etichette applicate a {{applied}} segnalibri.",
+    "failed": "{{failed}} non riuscite."
+  }
+}

@@ -1,0 +1,13 @@
+<!doctype html><html lang=""><head><meta charset="utf-8"><title>Nextcloud Bookmark Manager - Find Duplicates</title><script>require( '../js/theme.min' )</script><link rel="stylesheet" type="text/css" href="../css/modal.min.css" media="all"><style>body { background-color: #ececec; }
+			[data-theme^="dark"] body { background-color: #323232; }
+			.dup-group { margin-bottom: 12px; padding: 8px; border: 1px solid var(--table-border); border-radius: 4px; background: var(--menu); }
+			.dup-url { font-size: 12px; color: var(--text-light); word-break: break-all; margin-bottom: 6px; }
+			.dup-item { font-size: 12px; padding: 4px 6px; margin: 3px 0; border-left: 3px solid var(--accent); background: var(--input-background); border-radius: 2px; }
+			.dup-item .title { font-weight: bold; color: var(--text); }
+			.dup-item .meta { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+			.merge-btn { float: right; font-size: 11px; padding: 2px 8px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 3px; }
+			.merge-btn:hover { opacity: .8; }
+			.merge-btn:disabled { opacity: .4; cursor: default; }
+			.summary { text-align: center; font-size: 13px; padding: 20px; color: var(--text-light); }
+			#results { padding: 8px 16px 50px; }
+			footer { position: fixed; bottom: 0; left: 0; right: 0; background: var(--menu); padding: 8px 16px; text-align: right; border-top: 1px solid var(--table-border); }</style></head><body><header data-i18n="findduplicates:header">Duplicate Bookmarks</header><div class="scroll"><div id="results"></div></div><footer><button id="close" class="ui-button" type="button" data-i18n="findduplicates:button.close">Close</button></footer><script>require( '../js/modal-find-duplicates.min' )</script></body></html>

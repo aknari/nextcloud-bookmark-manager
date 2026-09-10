@@ -1,0 +1,19 @@
+{
+	"header": "Segnalibri Duplicati",
+	"button": {
+		"close": "Chiudi",
+		"merge": "Unisci {{count}}",
+		"merging": "Unendo…"
+	},
+	"label": {
+		"folders": "Cartelle",
+		"tags": "Etichette"
+	},
+	"error": {
+		"nodata": "Nessun dato disponibile."
+	},
+	"summary": {
+		"none": "Nessun segnalibro duplicato trovato.",
+		"found": "{{count}} gruppi duplicati trovati."
+	}
+}

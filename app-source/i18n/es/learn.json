@@ -1,0 +1,44 @@
+{
+  "header": "Aprender estructura de carpetas",
+  "label": {
+    "folder": "Carpeta de la que aprender",
+    "subfolders": "Subcarpetas encontradas",
+    "tags": "Etiquetas en la carpeta",
+    "model": "Modelo IA",
+    "name": "Nombre del perfil",
+    "description": "Criterio detectado",
+    "foldernames": "Nombres de carpeta en este estilo",
+    "taglist": "Vocabulario de etiquetas (de tus marcadores)",
+    "home": "Inicio",
+    "nochildren": "No se encontraron subcarpetas en esta carpeta — selecciona primero una carpeta con subcarpetas"
+  },
+  "hint": {
+    "learn": "La IA analiza los nombres de las subcarpetas y títulos de muestra de los marcadores para deducir el criterio de organización, que puedes guardar como perfil reutilizable.",
+    "tags": "Estas etiquetas se preferirán (no se impondrán) al auto-etiquetar con este perfil. Desmarca las que no quieras conservar."
+  },
+  "button": {
+    "analyze": "Analizar estructura",
+    "save": "Guardar perfil",
+    "saved": "Perfil guardado",
+    "close": "Cerrar",
+    "cancel": "Cancelar"
+  },
+  "error": {
+    "noconfig": "No se encontró configuración de IA. Ve a Marcadores > Configuración de IA para configurar tu clave API primero.",
+    "nochildren_title": "Sin subcarpetas",
+    "nochildren_content": "Selecciona una carpeta que contenga subcarpetas antes de aprender.",
+    "analysis": "El análisis falló. Inténtalo de nuevo.",
+    "noname_title": "Nombre de perfil obligatorio",
+    "noname_content": "Introduce un nombre para el perfil.",
+    "duplicate_title": "El perfil ya existe",
+    "duplicate_content": "Ya existe un perfil llamado \"{{name}}\". Elige otro nombre."
+  },
+  "progress": {
+    "analyzing": "Analizando la estructura de carpetas…"
+  },
+  "results": {
+    "nocriterion": "No se detectó un criterio claro en esta estructura. Aún puedes describir uno tú y guardarlo, o cerrar.",
+    "nofoldernames": "(ninguno detectado)",
+    "notags": "No se encontraron etiquetas en los marcadores de esta carpeta — este perfil solo guiará los nombres de carpeta."
+  }
+}

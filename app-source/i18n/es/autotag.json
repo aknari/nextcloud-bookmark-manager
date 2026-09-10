@@ -1,0 +1,76 @@
+{
+  "header": "Auto-Etiquetar Marcadores",
+  "button": {
+    "start": "Iniciar",
+    "acceptall": "Aceptar Todas",
+    "apply": "Aplicar al Servidor",
+    "applying": "Aplicando…",
+    "applying_progress": "Aplicando… {{current}}/{{total}}",
+    "close": "Cerrar",
+    "cancelling": "Cancelando…"
+  },
+  "label": {
+    "model": "Modelo IA",
+    "maxtags": "Máx. etiquetas por marcador",
+    "maxsession": "Máx. marcadores a procesar",
+    "selectedbm": "Marcadores seleccionados",
+    "selected_count": "{{selected}} marcadores seleccionados",
+    "none_selected": "Ninguno seleccionado — selecciona marcadores (Ctrl+Click) o una carpeta primero",
+    "cleartags": "Borrar etiquetas existentes primero",
+    "consider_existing": "Considerar las etiquetas existentes (reutilizar mi vocabulario)",
+    "profile": "Perfil de etiquetado",
+    "noprofile": "Ninguno (la IA decide libremente)",
+    "defaultprofile": "Predeterminado (integrado)",
+    "notagsuffix": " (sin etiquetas)",
+    "profilepreview_none": "(sin etiquetas en este perfil)",
+    "folder": "Carpeta a etiquetar",
+    "bookmarks": "Marcadores en la carpeta",
+    "includesub": "Incluir marcadores de las subcarpetas",
+    "capnotice": "Esta ejecución procesará solo <strong>{{cap}}</strong> de <strong>{{total}}</strong> marcadores (límite de sesión IA).",
+    "overridecap": "Procesar todos para esta ejecución (temporal)",
+    "nofolder": "No se encontraron marcadores en esta carpeta — selecciona marcadores o una carpeta primero"
+  },
+  "hint": {
+    "profile": "Opcional: preferir las etiquetas del vocabulario de un perfil aprendido",
+    "consider_existing": "La IA puede reutilizar etiquetas que ya uses en lugar de inventar otras nuevas"
+  },
+  "error": {
+    "noconfig": "No se encontró configuración de IA. Ve a Marcadores > Configuración de IA para configurar tu clave API.",
+    "notable": "Error: no se pudo acceder a la tabla de marcadores.",
+    "noselected": "No hay marcadores seleccionados. Selecciona marcadores primero (Ctrl+Click o Shift+Click).",
+    "nobookmarks": "No se encontraron marcadores para procesar.",
+    "notags_title": "Sin etiquetas para aplicar",
+    "notags_content": "No hay marcadores con etiquetas aceptadas. Activa etiquetas o usa Aceptar Todas primero."
+  },
+  "progress": {
+    "starting": "Iniciando…",
+    "processing": "Procesando {{current}} de {{total}}: {{title}}",
+    "quota": "Cuota de API alcanzada — reintentando en {{wait}}s…",
+    "quota_minute_title": "Cuota de API alcanzada — reintentando automáticamente",
+    "quota_minute": "Se ha alcanzado el límite por minuto de la API. Reintentando en <strong>{{wait}}s</strong> (intento {{attempt}} de {{max}}). Puedes dejar esta ventana abierta — continuará por sí solo.",
+    "quota_daily_title": "Cuota diaria de API alcanzada",
+    "quota_daily": "Se ha agotado la cuota diaria gratuita. Se restablece a medianoche, hora del Pacífico (dentro de unas <strong>{{hours}}h {{minutes}}m</strong>). Puedes cerrar esta ventana con tranquilidad — no se ha cambiado nada y no se ha perdido ningún marcador.",
+    "quota_stopped_title": "Ejecución detenida — cuota de API agotada",
+    "quota_stopped": "La ejecución se detuvo porque la cuota de la API sigue agotada tras varios reintentos. Casi con seguridad es el límite diario — se restablece a medianoche, hora del Pacífico (dentro de unas <strong>{{hours}}h {{minutes}}m</strong>). Puedes cerrar esta ventana con tranquilidad — no se ha cambiado nada y no se ha perdido ningún marcador."
+  },
+  "summary": {
+    "processed": "Procesados <strong>{{total}}</strong> marcadores. <strong>{{accepted}}</strong> tienen etiquetas sugeridas ({{tags}} etiquetas en total).",
+    "quota_box": "⚠ <strong>La ejecución se detuvo por la cuota de la API.</strong> Solo se procesaron <strong>{{processed}}</strong> de {{total}} marcadores — los <strong>{{left}}</strong> restantes NO se procesaron y conservan sus etiquetas actuales. La cuota se restablece a medianoche, hora del Pacífico (dentro de unas <strong>{{hours}}h {{minutes}}m</strong>). Puedes cerrar esta ventana — no se ha cambiado nada más."
+  },
+  "results": {
+    "empty": "No se procesaron marcadores.",
+    "error": "Error: {{error}}",
+    "notags": "No se encontraron etiquetas relevantes",
+    "quotaerror": "Cuota de API alcanzada — ejecución detenida",
+    "clicktoggle": "Clic para alternar"
+  },
+  "done": {
+    "title": "Auto-Etiquetado Completado",
+    "applied": "Etiquetas aplicadas a {{applied}} marcadores.",
+    "failed": "{{failed}} fallaron."
+  },
+  "status": {
+    "scanned": "Proceso completado — revisa las etiquetas propuestas a continuación.",
+    "applied": "Etiquetas aplicadas al servidor ({{count}} marcadores)."
+  }
+}

@@ -17,11 +17,12 @@
 				<ul id="fields">
 					<li>
 						<label for="server" data-i18n="login:body.label.server">server</label>
-						<input type="url" id="server" class="mousetrap" name="server" placeholder="https://your-server-address.com" required pattern="https?://.+" title="this field is required" value="" data-i18n="[placeholder]login:body.input.placeholder; [title]login:body.input.title" tabindex="1">
+						<input type="text" id="server" class="mousetrap" name="server" placeholder="https://your-server-address.com" required title="this field is required" value="" data-i18n="[placeholder]login:body.input.placeholder; [title]login:body.input.title" tabindex="1">
 					</li>
 				</ul>
 				
 				<footer>
+					<button id="offline" class="ui-button" type="button" data-i18n="login:body.button.offline" tabindex="5">Continue offline</button>
 					<button id="cancel" class="ui-button" type="button" data-i18n="login:body.button.cancel"tabindex="4">Cancel</button>
 					<button id="logout" class="ui-button" type="button" data-i18n="login:body.button.logout" tabindex="3">‹ Logout</button>
 					<button id="update" class="ui-button" type="submit" data-i18n="login:body.button.login" tabindex="2">Login ›</button>

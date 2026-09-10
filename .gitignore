@@ -11,3 +11,5 @@ build
 npm-debug.log
 .nova/
 .vscode/
+.aider*
+.env

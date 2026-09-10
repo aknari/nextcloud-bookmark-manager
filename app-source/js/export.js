@@ -1,21 +1,49 @@
 'use strict'
 
+const { ipcRenderer } = require( 'electron' )
 const i18n			= require( './i18n.min' )
-
-const { remote } 	= require('electron')
 const path 			= require('path')
-const dialog		= remote.dialog
 const fs 			= require( 'fs-extra' )
 const log 			= require( 'electron-log' )
 const Store 		= require( 'electron-store' )
-const store			= new Store()
-const bookmarks		= new Store( {name: 'bookmarks'} )
 
+let store
+try { 
+	store = new Store()
+} catch(e) {
+	// Store creation failed - export will not persist settings
+}
 
+let bookmarks
+try { 
+	bookmarks = new Store( {name: 'bookmarks'} )
+} catch(e) {
+	// Bookmarks store creation failed - export will not be available
+}
 
-module.exports.exportBookmarks = function( filePath ) {
+//note(dgmid): locale-aware name comparison for the sorted export (A→Z). Plain
+//code-point compares would put accented/uppercase names ("Álava", "Ñandú") at the
+//end of the list, which looks wrong for Spanish and other Latin-script bookmarks.
+
+const _collator = ( typeof Intl !== 'undefined' && Intl.Collator )
+	? new Intl.Collator( undefined, { numeric: true, sensitivity: 'base' } )
+	: null
+
+function _compareNames( a, b ) {
 	
-	dialog.showSaveDialog(remote.getCurrentWindow(), {
+	if( _collator ) return _collator.compare( a, b )
+	
+	a = String( a ).toLowerCase()
+	b = String( b ).toLowerCase()
+	
+	return ( a > b ) ? 1 : ( ( a < b ) ? -1 : 0 )
+}
+
+
+
+module.exports.exportBookmarks = function( filePath, sortAlpha ) {
+	
+	ipcRenderer.invoke('show-save-dialog', {
 			
 		defaultPath: filePath,
 		buttonLabel: i18n.t('export:savedialog.button', 'Export Bookmarks'),
@@ -23,28 +51,61 @@ module.exports.exportBookmarks = function( filePath ) {
 						'createDirectory'
 					],
 		filters: [
-					{	name:		'html',
-						extensions:	['html']
+				{	name:		'html',
+					extensions:	['html']
 					}
-				]
+			]
 		}
 	).then((data) =>{
 		
-		if( data.canceled === false ) {
+		if( !data.canceled ) {
 			
 			store.set( 'exportPath', data.filePath )
-			exportAllBookmarks( data.filePath )
+			exportAllBookmarks( data.filePath, sortAlpha === true )
 		}
 	})
 }
 
 
 
-function exportAllBookmarks( exportPath ) {
+function exportAllBookmarks( exportPath, sortAlpha ) {
 	
 	let expname 		= path.basename( exportPath ),
 		exppath 		= path.dirname( exportPath ),
-		bookmarkdata 	= bookmarks.get( 'data' )
+		bookmarkdata 	= bookmarks.get( 'data' ) || [],
+		folderdata 		= store.get( 'folders' ) || []
+	
+	//note(dgmid): rebuild the folder tree so the export preserves the structure
+	//(standard Netscape format: <H3> for folders, nested <DL> per level).
+	//Bookmarks belonging to several folders are listed under each of them.
+	let byParent = new Map(),
+		bookmarksByFolder = new Map(),
+		knownIds = new Set()
+	
+	for( let folder of folderdata ) {
+		
+		knownIds.add( folder.id )
+		
+		let parent = ( folder.parent_folder == null || folder.parent_folder === -1 || folder.parent_folder === '-1' ) ? -1 : folder.parent_folder
+		
+		if( !byParent.has( parent ) ) byParent.set( parent, [] )
+		byParent.get( parent ).push( folder )
+	}
+	
+	for( let item of bookmarkdata ) {
+		
+		let ids = ( item.folders && Array.isArray( item.folders ) && item.folders.length ) ? item.folders : [ -1 ]
+		
+		for( let fid of ids ) {
+			
+			//note(dgmid): unknown folder ids (deleted folder, stale store) must not
+			//drop the bookmark — route it to the root level instead
+			if( !knownIds.has( fid ) ) fid = -1
+			
+			if( !bookmarksByFolder.has( fid ) ) bookmarksByFolder.set( fid, [] )
+			bookmarksByFolder.get( fid ).push( item )
+		}
+	}
 	
 	let output =
 `<!DOCTYPE NETSCAPE-Bookmark-file-1>
@@ -53,20 +114,96 @@ function exportAllBookmarks( exportPath ) {
 <H1>Bookmarks</H1>
 <DL><p>`
 	
-	
-	for ( let item of bookmarkdata ) {
+	function bookmarkLine( item ) {
 		
-		let tagList = item.tags.toString()
-			
-		output +=
-`
-<DT><A HREF="${item.url}" TAGS="${tagList}">${item.title}</A>`
+		let tagList = ( item.tags || [] ).toString()
+		
+		let line = `\n<DT><A HREF="${item.url}" TAGS="${tagList}">${item.title}</A>`
 		
 		if( item.description ) {
 			
-			output += `<DD>${item.description}`
+			line += `\n<DD>${item.description}`
+		}
+		
+		return line
+	}
+	
+	//note(dgmid): children of one folder level — bookmarks + subfolders. When the
+	//sorted mode is on they are interleaved and ordered by name (folders and
+	//bookmarks together, like a file browser); otherwise bookmarks come first in
+	//store order and then the subfolders, preserving the previous behaviour.
+	
+	function levelEntries( fid ) {
+		
+		let bms = ( bookmarksByFolder.get( fid ) || [] ).map( item => ( { kind: 'bm', item: item } ) )
+		let fds = ( byParent.get( fid ) || [] ).map( folder => ( { kind: 'fd', folder: folder } ) )
+		
+		if( !sortAlpha ) return bms.concat( fds )
+		
+		return bms.concat( fds ).sort( ( a, b ) => {
+			
+			let na = a.kind === 'bm' ? a.item.title : a.folder.text
+			let nb = b.kind === 'bm' ? b.item.title : b.folder.text
+			
+			return _compareNames( na, nb )
+		})
+	}
+	
+	let visited = new Set()
+	
+	function folderBlock( folder, ancestry ) {
+		
+		visited.add( folder.id )
+		
+		let out = `\n<DT><H3>${folder.text}</H3>\n<DL><p>`
+		
+		for( let entry of levelEntries( folder.id ) ) {
+			
+			if( entry.kind === 'bm' ) {
+				
+				out += bookmarkLine( entry.item )
+				
+			} else {
+				
+				//note(dgmid): guard against cyclic folder data
+				if( ancestry.has( entry.folder.id ) ) continue
+				
+				ancestry.add( entry.folder.id )
+				out += folderBlock( entry.folder, ancestry )
+				ancestry.delete( entry.folder.id )
+			}
+		}
+		
+		out += `\n</DL><p>`
+		
+		return out
+	}
+	
+	//note(dgmid): root level — loose bookmarks and top-level folders (their order
+	//depends on the sorted mode, see levelEntries)
+	for( let entry of levelEntries( -1 ) ) {
+		
+		if( entry.kind === 'bm' ) {
+			
+			output += bookmarkLine( entry.item )
+			
+		} else {
+			
+			output += folderBlock( entry.folder, new Set( [ entry.folder.id ] ) )
 		}
 	}
+	
+	//note(dgmid): orphaned folders (their parent is unknown/missing) would be
+	//unreachable from the root — emit them at root level so nothing is lost
+	for( let folder of folderdata ) {
+		
+		if( !visited.has( folder.id ) ) {
+			
+			output += folderBlock( folder, new Set( [ folder.id ] ) )
+		}
+	}
+	
+	output += `\n</DL><p>`
 	
 	fs.outputFile( exportPath, output )
 
@@ -83,9 +220,6 @@ function exportAllBookmarks( exportPath ) {
 		
 		log.error( error )
 		
-		dialog.showErrorBox(
-			i18n.t('export:errorbox.title', 'Export Error'),
-			i18n.t('export:errorbox.content', 'An error occured exporting:\n{{- filepath}}', {filepath: exportPath})
-		)
+		ipcRenderer.send('show-error-box', { title: i18n.t('export:errorbox.title', 'Export Error'), content: i18n.t('export:errorbox.content', 'An error occured exporting:\n{{- filepath}}', {filepath: exportPath}) })
 	})
 }

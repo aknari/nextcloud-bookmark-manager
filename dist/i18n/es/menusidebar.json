@@ -1,0 +1,10 @@
+{
+  "folders": {
+    "edit": "Editar la carpeta '{{- folder}}'…",
+    "delete": "Eliminar la carpeta '{{- folder}}'…"
+  },
+  "tags": {
+      "edit": "Editar la etiqueta '{{- tag}}'…",
+      "delete": "Eliminar la etiqueta '{{- tag}}'…"
+  }
+}

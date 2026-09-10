@@ -1,0 +1,44 @@
+{
+  "header": "Configuración de IA",
+  "label": {
+    "apikey": "Clave API de Gemini",
+    "model": "Modelo IA",
+    "maxtags": "Máx. etiquetas por marcador",
+    "maxsession": "Máx. marcadores por sesión",
+    "apigap": "Retardo entre llamadas de IA (ms)",
+    "profiles": "Perfiles aprendidos (estructura de carpetas)",
+    "profile_source": "Aprendido de: {{folder}}",
+    "defaultprofile": "Predeterminado (integrado)",
+    "builtin": "Integrado",
+    "default_source": "Viene con la app — no se puede eliminar"
+  },
+  "hint": {
+    "apikey": "Obtén tu clave gratuita en ai.google.dev",
+    "model": "Los modelos Flash son más rápidos y elegibles para el plan gratuito",
+    "maxsession": "Limita el uso de la API por ejecución",
+    "apigap": "El plan gratuito permite ~20 peticiones/minuto — mantén 3500 ms o más para ejecuciones grandes. Pon 0 con un plan de pago."
+  },
+  "button": {
+    "test": "Probar conexión",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "deleteprofile": "Eliminar",
+    "resetprofiles": "Restablecer aprendizaje"
+  },
+  "status": {
+    "noapikey": "Introduce una clave API primero.",
+    "testing": "Probando conexión y obteniendo modelos…",
+    "error": "Conexión fallida: {{error}}",
+    "success_basic": "¡Conectado! Clave API válida. Cargados {{total}} modelos.",
+    "success_populated": "¡Conectado! Cargados {{total}} modelos ({{flash}} flash).",
+    "nomodels": "No hay modelos disponibles",
+    "noprofiles": "Aún no hay perfiles aprendidos. Usa Marcadores > Aprender estructura de carpetas… para crear uno."
+  },
+  "dialog": {
+    "deleteprofile": "¿Eliminar el perfil \"{{name}}\"?",
+    "deleteprofile_detail": "Este perfil ya no se ofrecerá en Auto-Organizar.",
+    "resetprofiles": "¿Restablecer todos los perfiles aprendidos?",
+    "resetprofiles_detail": "Esto borra todos los perfiles aprendidos. Auto-Organizar volverá a su comportamiento predeterminado (genérico).",
+    "cancel": "Cancelar"
+  }
+}

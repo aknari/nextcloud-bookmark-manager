@@ -1,0 +1,44 @@
+{
+  "header": "Learn Folder Structure",
+  "label": {
+    "folder": "Folder to Learn From",
+    "subfolders": "Subfolders Found",
+    "tags": "Tags in Folder",
+    "model": "AI Model",
+    "name": "Profile Name",
+    "description": "Detected Criterion",
+    "foldernames": "Folder Names in this Style",
+    "taglist": "Tag Vocabulary (from your bookmarks)",
+    "home": "Home",
+    "nochildren": "No subfolders found in this folder — select a folder with subfolders first"
+  },
+  "hint": {
+    "learn": "The AI analyzes the subfolder names and sample bookmark titles to deduce the organizing criterion, which you can save as a reusable profile.",
+    "tags": "These tags will be preferred (not forced) when auto-tagging with this profile. Uncheck any you don't want to keep."
+  },
+  "button": {
+    "analyze": "Analyze Structure",
+    "save": "Save Profile",
+    "saved": "Profile Saved",
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "error": {
+    "noconfig": "No AI configuration found. Go to Bookmarks > AI Settings to set up your API key first.",
+    "nochildren_title": "No Subfolders",
+    "nochildren_content": "Select a folder that contains subfolders before learning.",
+    "analysis": "The analysis failed. Please try again.",
+    "noname_title": "Profile Name Required",
+    "noname_content": "Please enter a name for the profile.",
+    "duplicate_title": "Profile Already Exists",
+    "duplicate_content": "A profile named \"{{name}}\" already exists. Choose a different name."
+  },
+  "progress": {
+    "analyzing": "Analyzing folder structure…"
+  },
+  "results": {
+    "nocriterion": "No clear criterion was detected in this structure. You can still describe one yourself and save it, or close.",
+    "nofoldernames": "(none detected)",
+    "notags": "No tags found in this folder's bookmarks — this profile will only guide folder names."
+  }
+}

@@ -1,9 +1,10 @@
 {
   "folders": {
-    "delete": "Delete {{- folder}} Folder…"
+    "edit": "Edit '{{- folder}}' Folder…",
+    "delete": "Delete '{{- folder}}' Folder…"
   },
   "tags": {
-      "edit": "Edit {{- tag}} Tag…",
-      "delete": "Delete {{- tag}} Tag…"
+      "edit": "Edit '{{- tag}}' Tag…",
+      "delete": "Delete '{{- tag}}' Tag…"
   }
 }

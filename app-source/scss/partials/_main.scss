@@ -11,7 +11,10 @@ main {
 	z-index: 1;
 	
 	background: var(--main);
-				
+	
+	display: flex;
+	flex-direction: column;
+	
 	h1 {
 		
 		text-align: center;
@@ -29,6 +32,340 @@ main {
 		bottom: 0;
 		z-index: 1;	
 		background: var(--loader) no-repeat center center;
+	}
+	
+	//note(dgmid): folder strip — cards of the current folder's subfolders + a Home drop zone
+	
+	#folder-strip {
+		
+		display: none;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 5px;
+		padding: 7px 12px;
+		max-height: 140px;
+		overflow-y: auto;
+		border-bottom: 1px solid var(--dividers);
+		background: var(--tabs);
+		
+		&.visible { display: flex; }
+		
+		.strip-label {
+			
+			font-size: 11px;
+			font-weight: 500;
+			color: var(--text-light);
+			margin-top: 2px;
+		}
+		
+		.subfolder-cards {
+			
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 6px;
+		}
+		
+		.folder-card {
+			
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			max-width: 220px;
+			padding: 4px 10px 4px 8px;
+			background: var(--button);
+			border: 1px solid var(--button-border);
+			border-radius: 5px;
+			cursor: default;
+			user-select: none;
+			-webkit-user-drag: element;
+			
+			transition: all .15s ease-in-out;
+			
+			.fc-icon {
+				
+				width: 14px;
+				height: 14px;
+				flex: none;
+				background-color: var(--side-icon);
+				mask: var(--icon-folder) no-repeat center center;
+			}
+			
+			.fc-name {
+				
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				color: var(--text);
+				font-size: 12px;
+			}
+			
+			.fc-count {
+				
+				flex: none;
+				min-width: 16px;
+				text-align: center;
+				font-size: 10px;
+				line-height: 14px;
+				color: var(--text-light);
+				background: var(--side-hover);
+				border-radius: 8px;
+				padding: 0 5px;
+			}
+			
+			&:hover {
+				
+				border-color: var(--accent);
+			}
+			
+			&.drag-over {
+				
+				border-color: var(--accent);
+				box-shadow: 0 0 0 2px var(--accent-light);
+				background: var(--accent-light);
+			}
+			
+			&.invalid {
+				
+				opacity: .4;
+				border-style: dashed;
+			}
+			
+			&.dragging { opacity: .5; }
+			
+			&.home {
+				
+				border-style: dashed;
+				background: transparent;
+				-webkit-user-drag: none;
+				
+				.fc-icon {
+					
+					background-color: var(--accent);
+					mask: var(--icon-home) no-repeat center center;
+				}
+			}
+		}
+	}
+	
+	//note(dgmid): top row — folder strip + view toggle button (list ⇄ cards)
+	
+	#main-top {
+		
+		display: flex;
+		align-items: flex-start;
+		
+		#folder-strip {
+			
+			flex: 1;
+			min-width: 0;
+		}
+		
+		#view-toggle {
+			
+			flex: none;
+			margin: 7px 12px 0 0;
+			z-index: 2;
+			height: 24px;
+		}
+	}
+	
+	//note(dgmid): sync indicator — small pill, bottom-right, fades in/out while a
+	//background reconciliation is running. Not a blocking overlay. Deliberately
+	//more visible than before (bigger spinner, stronger border/shadow) so it can't
+	//be missed, and it stays up for a minimum time (see showSync/hideSync in app.js).
+	
+	#sync-indicator {
+		
+		position: absolute;
+		right: 14px;
+		bottom: 12px;
+		z-index: 3;
+		
+		display: none;
+		align-items: center;
+		gap: 7px;
+		
+		padding: 5px 12px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--text);
+		background: var(--button);
+		border: 1px solid var(--button-border);
+		border-radius: 12px;
+		box-shadow: 0 1px 4px rgba(0,0,0,.25);
+		pointer-events: none;
+		
+		.sync-spinner {
+			
+			width: 12px;
+			height: 12px;
+			border: 2px solid var(--text-light);
+			border-top-color: var(--accent);
+			border-radius: 50%;
+			animation: sync-spin .8s linear infinite;
+		}
+		
+		&.visible {
+			
+			display: inline-flex;
+			animation: sync-fade-in .15s ease;
+		}
+	}
+	
+	//note(dgmid): let the DataTable fill the height left below the strip
+	
+	.dataTables_wrapper {
+		
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		
+		.dataTables_scroll {
+			
+			flex: 1;
+			min-height: 0;
+			display: flex;
+			flex-direction: column;
+			
+			.dataTables_scrollBody {
+				
+				flex: 1;
+				min-height: 0;
+				height: auto !important;
+			}
+		}
+	}
+	
+	//note(dgmid): card grid view — alternate rendering of the filtered bookmarks.
+	//The DataTable stays the single source of truth; the grid mirrors the rows that
+	//pass the current filters and lazy-loads preview screenshots into the cards.
+	
+	#bookmark-grid {
+		
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		overflow-x: hidden;
+		display: none;
+		
+		&.visible {
+			
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+			grid-auto-rows: min-content;
+			align-content: start;
+			gap: 12px;
+			padding: 14px;
+		}
+		
+		.grid-empty {
+			
+			grid-column: 1 / -1;
+			text-align: center;
+			padding: 40px 20px;
+			font-size: 13px;
+			color: var(--text);
+			opacity: .5;
+		}
+		
+		.bm-card {
+			
+			background: var(--button);
+			border: 1px solid var(--button-border);
+			border-radius: 6px;
+			overflow: hidden;
+			cursor: default;
+			user-select: none;
+			
+			transition: all .15s ease-in-out;
+			
+			&:hover {
+				
+				border-color: var(--accent);
+			}
+			
+			&.selected {
+				
+				border-color: var(--accent);
+				box-shadow: 0 0 0 2px var(--accent-light);
+			}
+			
+			.bm-thumb {
+				
+				position: relative;
+				aspect-ratio: 16 / 9;
+				background: var(--stripe-even);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				overflow: hidden;
+				
+				.bm-loading {
+					
+					width: 18px;
+					height: 18px;
+					border: 2px solid var(--text-light);
+					border-top-color: var(--accent);
+					border-radius: 50%;
+					animation: sync-spin .8s linear infinite;
+				}
+				
+				img.bm-preview {
+					
+					width: 100%;
+					height: 100%;
+					object-fit: cover;
+				}
+				
+				.bm-thumb-fallback {
+					
+					display: flex;
+					flex-direction: column;
+					align-items: center;
+					gap: 6px;
+					padding: 10px;
+					text-align: center;
+					
+					.bm-domain {
+						
+						font-size: 11px;
+						color: var(--text-light);
+						max-width: 100%;
+						white-space: nowrap;
+						overflow: hidden;
+						text-overflow: ellipsis;
+					}
+				}
+			}
+			
+			.bm-info {
+				
+				padding: 8px 10px 10px;
+				
+				.bm-title {
+					
+					font-size: 12px;
+					line-height: 1.35;
+					color: var(--text);
+					overflow: hidden;
+					display: -webkit-box;
+					-webkit-line-clamp: 2;
+					-webkit-box-orient: vertical;
+				}
+				
+				.bm-domain {
+					
+					font-size: 10px;
+					color: var(--text-light);
+					margin-top: 5px;
+					white-space: nowrap;
+					overflow: hidden;
+					text-overflow: ellipsis;
+				}
+			}
+		}
 	}
 }
 
@@ -90,7 +427,56 @@ aside {
 	
 	#sidebar-tags {
 		
-		.sidebar-scroll { top: 44px; }
+		.sidebar-scroll { top: 66px; }
+	}
+	
+	//note(dgmid): multi-tag AND/OR toolbar — lets the user combine several tags
+	//(all of them with AND, any of them with OR) plus a one-click clear
+	
+	#tag-toolbar {
+		
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 2px 12px 4px;
+		
+		button {
+			
+			appearance: none;
+			border: 1px solid var(--button-border);
+			background: var(--button);
+			color: var(--side-text);
+			font-size: 10px;
+			line-height: 16px;
+			padding: 0 8px;
+			border-radius: 10px;
+			cursor: default;
+			outline: none;
+			
+			transition: all .15s ease-in-out;
+			
+			&:hover { border-color: var(--accent); }
+			
+			&.tag-mode.active {
+				
+				background: var(--accent);
+				border-color: var(--accent);
+				color: #fff;
+				font-weight: 600;
+			}
+			
+			&.tag-clear {
+				
+				margin-left: auto;
+				opacity: .85;
+				
+				&:disabled {
+					
+					opacity: .35;
+					border-color: var(--button-border);
+				}
+			}
+		}
 	}
 	
 	.list-title {
@@ -200,35 +586,33 @@ aside {
 					overflow: hidden;
 					text-overflow: ellipsis;
 					padding-right: 5px;
+				}						&.selected {
+						
+							background: var(--accent-light);
+							color: #fff;
+						
+							.filter-icon { background-color: #fff; }
+						
+							&.folder {
+						
+							background-image: var(--icon-folder-selected);
+							background-position: left 8px top 5px;
+							background-repeat: no-repeat;
+						
+							&.folder-home { background-image: none; }
+						}
+					}
 				}
 				
-				&.selected {
+				input[type='checkbox'] {
 					
-					background: var(--accent-light);
-					color: #fff;
-					
-					.filter-icon { background-color: #fff; }
-					
-					&.folder {
-						
-						background-image: var(--icon-folder-selected);
-						background-position: left 8px top 5px;
-						background-repeat: no-repeat;
-						
-						&.folder-home { background-image: none; }
-					}
+					margin: 0 9px 0 10px;
+    				width: 8px;
+					height: 10px;
 				}
 			}
 			
-			input[type='checkbox'] {
-				
-				margin: 0 9px 0 10px;
-    			width: 8px;
-				height: 10px;
-			}
-		}
-		
-		&#filter-all,
+			&#filter-all,
 		&#new-folder,
 		&#taglist-extras {
 			
@@ -238,6 +622,143 @@ aside {
 					
 					padding-left: 0;
 				}
+			}
+		}
+	}
+	
+	// Folder tree view styles — the tree renders inside #folderlist, a <div> (not a <dl>), so these are siblings of dl
+	// #folderlist keeps the horizontal padding that the base dl rule used to provide
+	#folderlist {
+		
+		padding: 0 10px;
+	}
+	
+	//note(dgmid): drop-target feedback when dragging bookmarks/folders onto the sidebar tree
+	
+	.folderlist .filter.folder {
+		
+		&.drag-over {
+			
+			background-color: var(--accent-light);
+			color: #fff;
+			background-image: var(--icon-folder-selected);
+			background-position: left 8px top 5px;
+			background-repeat: no-repeat;
+			
+			&.folder-home { background-image: none; }
+		}
+		
+		&.invalid {
+			
+			opacity: .4;
+		}
+	}
+	
+	.folderlist .folder-tree {
+		
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		
+		.folder-tree {
+			
+			padding-left: 0;
+		}
+		
+		.folder-tree-item {
+			
+			position: relative;
+			
+			&.collapsed > .folder-tree {
+				
+				display: none;
+			}
+		}
+		
+		.folder-toggle {
+			
+			position: absolute;
+			left: 2px;
+			top: 5px;
+			width: 14px;
+			height: 14px;
+			cursor: default;
+			z-index: 2;
+			
+			&::before {
+				
+				content: '';
+				display: block;
+				width: 0;
+				height: 0;
+				border-left: 5px solid var(--side-icon);
+				border-top: 4px solid transparent;
+				border-bottom: 4px solid transparent;
+				margin: 4px 0 0 4px;
+				transition: transform .15s ease;
+			}
+			
+			&:hover::before {
+				
+				border-left-color: var(--side-text);
+			}
+		}
+		
+		.collapsed > .folder-toggle::before {
+			
+			transform: rotate(45deg);
+		}
+		
+		// Folder icon for tree items
+		a.filter.folder {
+			
+			font-size: 12px;
+			line-height: 22px;
+			color: var(--side-text);
+			text-decoration: none;
+			border-radius: 6px;
+			transition: all .15s ease-in-out;
+			-webkit-user-drag: element;
+			cursor: default;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			display: block;
+			position: relative;
+			
+			background-image: var(--icon-folder);
+			background-position: left 10px top 5px;
+			background-repeat: no-repeat;
+			
+			&:hover {
+				
+				background-color: var(--side-hover);
+			}
+			
+			&.selected {
+				
+				background-color: var(--accent-light);
+				color: #fff;
+				background-image: var(--icon-folder-selected);
+				background-position: left 10px top 5px;
+				background-repeat: no-repeat;
+			}
+			
+			//note(dgmid): ⌘/Ctrl multi-selection ring — visible even over the filled
+			//"selected" background so the current folder can also be part of a group
+			&.multiselected {
+				
+				box-shadow: inset 0 0 0 1.5px var(--accent-light);
+			}
+			
+			&.selected.multiselected {
+				
+				box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .9);
+			}
+			
+			&.dragging {
+				
+				opacity: .45;
 			}
 		}
 	}
@@ -667,4 +1188,17 @@ td.padded-right {
 			}
 		}
 	}
+}
+
+//note(dgmid): sync indicator animations
+
+@keyframes sync-spin {
+	
+	to { transform: rotate(360deg); }
+}
+
+@keyframes sync-fade-in {
+	
+	from { opacity: 0; }
+	to   { opacity: 1; }
 }

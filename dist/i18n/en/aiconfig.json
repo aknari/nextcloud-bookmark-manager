@@ -1,0 +1,44 @@
+{
+  "header": "AI Configuration",
+  "label": {
+    "apikey": "Gemini API Key",
+    "model": "AI Model",
+    "maxtags": "Max Tags per Bookmark",
+    "maxsession": "Max Items per AI Session",
+    "apigap": "Delay Between AI Calls (ms)",
+    "profiles": "Learned Profiles (Folder Structure)",
+    "profile_source": "Learned from: {{folder}}",
+    "defaultprofile": "Default (built-in)",
+    "builtin": "Built-in",
+    "default_source": "Ships with the app — cannot be deleted"
+  },
+  "hint": {
+    "apikey": "Get your free key at ai.google.dev",
+    "model": "Flash models are faster and free-tier eligible",
+    "maxsession": "Limits AI API usage per run (auto-tag, auto-organize)",
+    "apigap": "Free tier allows ~20 requests/minute — keep 3500 ms or more for large runs. Set 0 on a paid plan."
+  },
+  "button": {
+    "test": "Test Connection",
+    "cancel": "Cancel",
+    "save": "Save",
+    "deleteprofile": "Delete",
+    "resetprofiles": "Reset Learning"
+  },
+  "status": {
+    "noapikey": "Please enter an API key first.",
+    "testing": "Testing connection & fetching models…",
+    "error": "Connection failed: {{error}}",
+    "success_basic": "Connected! API key is valid. Loaded {{total}} models.",
+    "success_populated": "Connected! Loaded {{total}} models ({{flash}} flash models).",
+    "nomodels": "No models available",
+    "noprofiles": "No learned profiles yet. Use Bookmarks > Learn Folder Structure… to create one."
+  },
+  "dialog": {
+    "deleteprofile": "Delete the profile \"{{name}}\"?",
+    "deleteprofile_detail": "This profile will no longer be offered in Auto-Organize.",
+    "resetprofiles": "Reset all learned profiles?",
+    "resetprofiles_detail": "This clears every learned profile. Auto-Organize will fall back to its default (generic) behavior.",
+    "cancel": "Cancel"
+  }
+}

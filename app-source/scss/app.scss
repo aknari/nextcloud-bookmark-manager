@@ -5,3 +5,46 @@
 @import 'partials/body';
 @import 'partials/main';
 @import 'partials/table';
+
+
+//note(dgmid): degraded (read-only) banner — the server rejected the session
+
+#degraded-banner {
+	
+	display: none;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 14px;
+	background: #b45309;	// amber-700
+	color: #fff;
+	font-size: 13px;
+	line-height: 1.45;
+	border-bottom: 1px solid rgba(255,255,255,.25);
+	
+	.degraded-icon {
+		
+		font-size: 15px;
+		flex: none;
+	}
+	
+	.degraded-text {
+		
+		flex: 1;
+	}
+	
+	button {
+		
+		flex: none;
+		background: rgba(255,255,255,.16);
+		border: 1px solid rgba(255,255,255,.45);
+		color: #fff;
+		border-radius: 4px;
+		padding: 4px 10px;
+		font-size: 12px;
+		cursor: pointer;
+		
+		&:hover { background: rgba(255,255,255,.28); }
+	}
+	
+	&.visible { display: flex; }
+}

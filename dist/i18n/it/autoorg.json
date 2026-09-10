@@ -1,0 +1,95 @@
+{
+  "header": "Auto-Organizza Segnalibri",
+  "label": {
+    "folder": "Cartella da organizzare",
+    "bookmarks": "Segnalibri nella cartella",
+    "model": "Modello AI",
+    "maxfolder": "Max elementi per cartella (segnalibri + sottocartelle)",
+    "minfolder": "Min. segnalibri per nuova cartella",
+    "destroot": "la cartella di destinazione",
+    "includesub": "Includi segnalibri nelle sottocartelle",
+    "capnotice": "Questa esecuzione elaborerà solo <strong>{{cap}}</strong> di <strong>{{total}}</strong> segnalibri (limite sessione IA).",
+    "overridecap": "Elabora tutti per questa esecuzione (temporaneo)",
+    "home": "Home",
+    "nobookmarks": "Nessun segnalibro trovato in questa cartella — seleziona prima una cartella",
+    "profile": "Profilo di organizzazione",
+    "noprofile": "Nessuno (l'IA decide liberamente)",
+    "defaultprofile": "Predefinito (integrato)",
+    "dest": "Cartella di destinazione",
+    "same": "Come l'origine (cartella corrente)",
+    "reusedest": "Usa la struttura esistente della destinazione come guida",
+    "deleteempty": "Elimina le cartelle vuote lasciate dopo l'organizzazione",
+    "consider_existing": "Considera le cartelle esistenti (riutilizza ciò che c'è già)",
+    "others": "Altri"
+  },
+  "hint": {
+    "profile": "Opzionale: applica una filosofia organizzativa appresa",
+    "reusedest": "Si applica solo quando la destinazione è diversa dalla cartella di origine",
+    "consider_existing": "Se disattivato, la struttura precedente delle cartelle viene scartata e l'IA riorganizza da zero usando solo il profilo selezionato",
+    "maxfolder": "Limite morbido: le cartelle che superano circa questo numero di elementi (segnalibri + sottocartelle) vengono divise in sottocartelle equilibrate; i gruppi vicini al limite restano uniti e le cartelle con un solo elemento vengono unite.",
+    "minfolder": "Le nuove cartelle create da questa esecuzione con meno segnalibri di questo numero vengono unite alla cartella sorella più vicina (o spostate di un livello). Evita cartelle con un solo segnalibro. Le cartelle esistenti vengono rispettate."
+  },
+  "button": {
+    "start": "Avvia",
+    "cleanempty": "Elimina cartelle vuote…",
+    "acceptall": "Accetta tutto",
+    "apply": "Applica al server",
+    "applying": "Applicazione…",
+    "close": "Chiudi",
+    "cancel": "Annulla"
+  },
+  "error": {
+    "noconfig": "Nessuna configurazione AI trovata. Vai su Segnalibri > Impostazioni IA per configurare prima la tua API key.",
+    "nocontext_title": "Nessuna cartella selezionata",
+    "nocontext_content": "Apri prima questa finestra da una cartella della finestra principale.",
+    "nomoves_title": "Nessuno spostamento da applicare",
+    "nomoves_content": "Nessun segnalibro ha spostamenti accettati. Attiva gli spostamenti o usa Accetta tutto."
+  },
+  "progress": {
+    "classifying": "Classificazione {{current}} di {{total}} segnalibri…",
+    "creating": "Creazione cartella {{current}} di {{total}}: {{name}}",
+    "moving": "Spostamento segnalibro {{current}} di {{total}}",
+    "deleting": "Eliminazione cartella vuota {{current}} di {{total}}",
+    "scanning": "Ricerca cartelle vuote…",
+    "rebalancing": "Riequilibrio cartelle…",
+    "quota": "Quota API raggiunta — nuovo tentativo tra {{wait}}s…",
+    "quota_minute_title": "Quota API raggiunta — nuovo tentativo automatico",
+    "quota_minute": "Raggiunto il limite al minuto dell'API. Nuovo tentativo tra <strong>{{wait}}s</strong> (tentativo {{attempt}} di {{max}}). Puoi lasciare aperta questa finestra — proseguirà da sola.",
+    "quota_daily_title": "Quota giornaliera API raggiunta",
+    "quota_daily": "La quota giornaliera gratuita è esaurita. Si azzera a mezzanotte, ora del Pacifico (tra circa <strong>{{hours}}h {{minutes}}m</strong>). Puoi chiudere questa finestra con tranquillità — non è stato modificato nulla e nessun segnalibro è andato perso.",
+    "quota_stopped_title": "Esecuzione interrotta — quota API esaurita",
+    "quota_stopped": "L'esecuzione è stata interrotta perché la quota dell'API è ancora esaurita dopo il nuovo tentativo. Quasi certamente è il limite giornaliero — si azzera a mezzanotte, ora del Pacifico (tra circa <strong>{{hours}}h {{minutes}}m</strong>). Puoi chiudere questa finestra con tranquillità — non è stato modificato nulla e nessun segnalibro è andato perso."
+  },
+  "summary": {
+    "proposed": "Proposto lo spostamento di <strong>{{moved}}</strong> di {{total}} segnalibri in <strong>{{new}}</strong> cartelle nuove e <strong>{{existing}}</strong> cartelle esistenti.",
+ "quota_box": "⚠ <strong>L'esecuzione è stata interrotta a causa della quota API.</strong> Solo <strong>{{moved}}</strong> di {{total}} segnalibri sono stati classificati — i rimanenti <strong>{{left}}</strong> NON sono stati elaborati e restano intatti sul server. La quota si azzera a mezzanotte, ora del Pacifico (tra circa <strong>{{hours}}h {{minutes}}m</strong>). Puoi chiudere questa finestra — non è stato modificato altro.",
+ "quota_box_done": "⚠ <strong>La classificazione è terminata ({{moved}} di {{total}} segnalibri), ma la fase di riequilibrio è stata interrotta dalla quota API.</strong> La proposta qui sotto è completa e puoi ancora applicarla — tuttavia le cartelle NON sono state riequilibrate al massimo configurato, quindi alcune possono contenere più elementi del limite. Non è stato modificato nulla sul server.",
+ "api_calls": "Questa esecuzione ha effettuato <strong>{{n}}</strong> chiamate API.",
+    "api_calls_stopped": "Questa esecuzione ha effettuato <strong>{{n}}</strong> chiamate API prima che la quota la interrompesse.",
+    "mechanical": "ℹ La fase di bilanciamento IA è stata interrotta, quindi <strong>{{count}}</strong> cartella/e sovraffollata/e sono state bilanciate senza IA (raggruppate per sito/dominio)."
+  },
+  "results": {
+    "empty": "Nessuno spostamento proposto.",
+    "new": "NUOVA",
+    "unassigned": "Non assegnati"
+  },
+  "done": {
+    "title": "Auto-Organizza completato",
+    "title_cancel": "Auto-Organizza annullato",
+    "applied": "Spostamenti applicati a {{count}} segnalibri.",
+    "skipped": "{{skipped}} saltati.",
+    "cancelled": "Operazione annullata.",
+    "emptied": "{{deleted}} cartelle vuote rimosse.",
+    "noempty": "Nessuna cartella vuota trovata in questo ambito.",
+    "title_clean": "Pulisci cartelle vuote"
+  },
+  "dialog": {
+    "emptyfolders": {
+      "message": "La riorganizzazione ha lasciato {{count}} cartelle vuote. Eliminarle?",
+      "message_standalone": "Trovate {{count}} cartelle vuote. Eliminarle?",
+      "note": "Nota: verranno rimosse anche eventuali sottocartelle vuote annidate al loro interno.",
+      "confirm": "Elimina cartelle vuote",
+      "cancel": "Annulla"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "header": "Impara la struttura delle cartelle",
+  "label": {
+    "folder": "Cartella da cui imparare",
+    "subfolders": "Sottocartelle trovate",
+    "tags": "Etichette nella cartella",
+    "model": "Modello IA",
+    "name": "Nome del profilo",
+    "description": "Criterio rilevato",
+    "foldernames": "Nomi di cartella in questo stile",
+    "taglist": "Vocabolario di etichette (dai tuoi segnalibri)",
+    "home": "Home",
+    "nochildren": "Nessuna sottocartella trovata in questa cartella — seleziona prima una cartella con sottocartelle"
+  },
+  "hint": {
+    "learn": "L'IA analizza i nomi delle sottocartelle e alcuni titoli dei segnalibri per dedurre il criterio di organizzazione, che puoi salvare come profilo riutilizzabile.",
+    "tags": "Queste etichette saranno preferite (non imposte) quando si auto-etichetta con questo profilo. Deseleziona quelle che non vuoi conservare."
+  },
+  "button": {
+    "analyze": "Analizza la struttura",
+    "save": "Salva profilo",
+    "saved": "Profilo salvato",
+    "close": "Chiudi",
+    "cancel": "Annulla"
+  },
+  "error": {
+    "noconfig": "Nessuna configurazione AI trovata. Vai su Segnalibri > Impostazioni IA per configurare prima la tua API key.",
+    "nochildren_title": "Nessuna sottocartella",
+    "nochildren_content": "Seleziona una cartella che contenga sottocartelle prima di imparare.",
+    "analysis": "L'analisi non è riuscita. Riprova.",
+    "noname_title": "Nome profilo obbligatorio",
+    "noname_content": "Inserisci un nome per il profilo.",
+    "duplicate_title": "Profilo già esistente",
+    "duplicate_content": "Esiste già un profilo chiamato \"{{name}}\". Scegli un nome diverso."
+  },
+  "progress": {
+    "analyzing": "Analisi della struttura delle cartelle…"
+  },
+  "results": {
+    "nocriterion": "In questa struttura non è stato rilevato alcun criterio chiaro. Puoi comunque descriverne uno tu e salvarlo, oppure chiudere.",
+    "nofoldernames": "(nessuno rilevato)",
+    "notags": "Nessuna etichetta trovata nei segnalibri di questa cartella — questo profilo guiderà solo i nomi delle cartelle."
+  }
+}

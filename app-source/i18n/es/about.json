@@ -1,0 +1,13 @@
+{
+  "body": {
+    "description": "Accede y gestiona tus marcadores de Nextcloud en el Mac",
+    "label": {
+      "version": "versión:",
+      "author": "autor:",
+      "license": "licencia:"
+    },
+    "button": {
+      "info": "más información"
+    }
+  }
+}

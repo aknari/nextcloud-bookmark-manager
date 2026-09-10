@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title></title>
+	<link rel="stylesheet" href="../../node_modules/select2/dist/css/select2.min.css">
+	<link rel="stylesheet" href="../css/modal.min.css">
+</head>
+<body>
+	<div id="wrapper">
+		<header>
+			<h1 data-i18n="import:header.title">Import Bookmarks</h1>
+		</header>
+		<main>
+			<!-- Step 1: File Selection -->
+			<div id="step-file">
+				<p data-i18n="import:body.instructions">Select an HTML file exported from a bookmark manager.</p>
+				<input type="file" id="file-input" accept=".html,.htm" style="display:none;">
+				<label for="file-input" class="ui-button" id="select-file" style="padding:4px 8px;border:1px solid #C5C3C5;border-bottom-color:#9F9E9F;background:#fff;border-radius:4px;cursor:pointer;font-size:12px;-webkit-user-select:none;user-select:none;" data-i18n="import:button.select">Select File…</label>
+				<span id="filename" style="margin-left: 8px; font-size: 12px; color: #666;"></span>
+			</div>
+
+			<!-- Step 2: Preview -->
+			<div id="step-preview" style="display:none;">
+				<p><strong data-i18n="import:body.preview">Bookmarks found:</strong> <span id="preview-count">0</span></p>
+				<div id="preview-list" style="max-height: 160px; overflow-y: auto; font-size: 12px; border: 1px solid #ddd; padding: 4px; margin-top: 4px;"></div>
+				<button id="start-import" class="ui-button" style="margin-top: 8px;" data-i18n="import:button.start">Start Import</button>
+			</div>
+
+			<!-- Step 3: Progress -->
+			<div id="step-progress" style="display:none;">
+				<div id="progress-bar-container" style="width:100%; height:16px; background:#e0e0e0; border-radius:8px; overflow:hidden; margin:8px 0;">
+					<div id="progress-bar" style="width:0%; height:100%; background:#0082c9; transition: width 0.3s;"></div>
+				</div>
+				<p id="progress-text" style="font-size:12px; color:#666;"></p>
+				<div id="import-results" style="max-height: 180px; overflow-y: auto; font-size: 12px; margin-top: 4px;"></div>
+			</div>
+
+			<!-- Step 4: Conflicts -->
+			<div id="step-conflicts" style="display:none;">
+				<p><strong data-i18n="import:body.conflicts">These bookmarks already exist with a different title:</strong></p>
+				<div id="conflicts-list" style="max-height: 180px; overflow-y: auto; font-size: 12px; border: 1px solid #ddd; padding: 4px; margin: 4px 0;"></div>
+				<div id="conflicts-actions" style="margin-top: 8px;">
+					<button id="import-confirmed" class="ui-button" data-i18n="import:button.importconflicts">Import Confirmed</button>
+					<button id="skip-conflicts" class="ui-button" style="margin-left: 4px;" data-i18n="import:button.skipconflicts">Skip All Conflicts</button>
+				</div>
+			</div>
+		</main>
+		<footer id="footer">
+			<button id="cancel" class="ui-button" data-i18n="import:button.cancel">Cancel</button>
+			<button id="close" class="ui-button" style="float:right; display:none;" data-i18n="import:button.close">Close</button>
+		</footer>
+	</div>
+	<script>
+		require('../js/theme.min')
+	</script>
+	<script>
+		require('../js/modal-import.min')
+	</script>
+</body>
+</html>

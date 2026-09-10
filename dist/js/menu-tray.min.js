@@ -24,7 +24,7 @@ let trayIcon 	= null,
 	
 	
 
-module.exports.menuTray = function () {
+module.exports.menuTray = function ( mainWinId ) {
 	
 	ipcMain.on( 'tray-menu', (event) => {
 		
@@ -33,8 +33,12 @@ module.exports.menuTray = function () {
 		let bookmarkdata 	= bookmarks.get( 'data' ),
 			folders 		= store.get( 'folders' )
 		
-		folders.sort((a,b) => (a.text > b.text) ? 1 : ((b.text > a.text) ? -1 : 0))
-		bookmarkdata.sort((a,b) => (a.title > b.title) ? 1 : ((b.title > a.title) ? -1 : 0))
+		if( folders && Array.isArray( folders ) ) {
+			folders.sort((a,b) => (a.text > b.text) ? 1 : ((b.text > a.text) ? -1 : 0))
+		}
+		if( bookmarkdata && Array.isArray( bookmarkdata ) ) {
+			bookmarkdata.sort((a,b) => (a.title > b.title) ? 1 : ((b.title > a.title) ? -1 : 0))
+		}
 		
 		const 	iconPath 	= path.join( __dirname , '../assets/png/iconTemplate.png' ),
 				folderPath 	= path.join( __dirname , '../assets/png/folderTemplate.png' )
@@ -43,7 +47,7 @@ module.exports.menuTray = function () {
 		
 		const	trayMenuTemplate = []
 		
-		for( let folder of folders ) {
+		if( folders ) for( let folder of folders ) {
 			
 			trayMenuTemplate.push({
 				label: folder.text,
@@ -56,7 +60,7 @@ module.exports.menuTray = function () {
 		
 		trayMenuTemplate.push({ type: 'separator' })
 		
-		for( let bookmark of bookmarkdata ) {
+		if( bookmarkdata ) for( let bookmark of bookmarkdata ) {
 			
 			for( let id of bookmark.folders  ) {
 				
@@ -99,9 +103,17 @@ module.exports.menuTray = function () {
 			
 			if( isUrl( text ) ) {
 			
-				let win = BrowserWindow.fromId(1)
-				win.show()
-				win.webContents.send( 'drop-on-tray', { "url": text, "title": '' } )
+				let win = BrowserWindow.fromId( mainWinId )
+				
+				if( win ) {
+					
+					win.show()
+					win.webContents.send( 'drop-on-tray', { "url": text, "title": '' } )
+					
+				} else {
+					
+					log.error( `tray drop-text: no window found for mainWinId ${mainWinId}` )
+				}
 			}
 		})
 		
@@ -122,9 +134,17 @@ module.exports.menuTray = function () {
 					
 					let loc = data.match( '\<string\>(.*?)\<\/string\>' )
 					
-					let win = BrowserWindow.fromId(1)
-					win.show()
-					win.webContents.send( 'drop-on-tray', { "url": loc[1], "title": name } )
+					let win = BrowserWindow.fromId( mainWinId )
+					
+					if( win ) {
+						
+						win.show()
+						win.webContents.send( 'drop-on-tray', { "url": loc[1], "title": name } )
+						
+					} else {
+						
+						log.error( `tray drop-files: no window found for mainWinId ${mainWinId}` )
+					}
 					
 				})
 			}

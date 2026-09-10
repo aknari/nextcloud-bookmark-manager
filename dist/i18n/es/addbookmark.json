@@ -1,0 +1,23 @@
+{
+  "header": "Añadir un nuevo marcador:",
+  "label": {
+    "url": "url",
+    "title": "título",
+    "description": "descripción",
+    "folders": "carpetas",
+    "tags": "etiquetas"
+  },
+  "input": {
+    "required": "este campo es obligatorio"
+  },
+    "select": {
+    "noresults": "No se encontraron resultados",
+    "option": {
+      "home": "Inicio"
+    }
+  },
+  "button": {
+    "cancel": "Cancelar",
+    "submit": "Añadir Marcador"
+  }
+}

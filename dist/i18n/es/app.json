@@ -1,0 +1,92 @@
+{
+  "degraded": {
+    "banner": "Servidor inaccesible o sesión rechazada — modo de solo lectura. Tus marcadores están a salvo en la copia local.",
+    "retry": "Reintentar conexión",
+    "export": "Exportar copia…",
+    "noexport": "Todavía no hay una copia local que exportar. Conéctate al servidor una vez para crearla.",
+    "title": "Modo sin conexión",
+    "writeblocked": "El servidor no responde o ha rechazado la sesión, así que los cambios no se están aplicando. Tus marcadores están a salvo en la copia local."
+  },
+  "errorbox": {
+    "title": {
+      "deletebookmark": "Error al Eliminar el Marcador",
+      "editbookmark": "Error al Editar el Marcador"
+    },
+    "content": {
+      "deletebookmark": "Debe seleccionarse un marcador para poder eliminarlo",
+      "editbookmark": "Debe seleccionarse un marcador para poder editarlo",
+      "deleteselected": "No hay marcadores seleccionados. Usa Ctrl+Click o Shift+Click para seleccionar varios marcadores, y luego inténtalo de nuevo."
+    }
+  },
+  "dialog": {
+    "message": {
+      "deletetag": "¿Seguro que quieres eliminar la etiqueta {{- tag}}?",
+      "deletebookmark": "¿Seguro que quieres eliminar el marcador {{- bookmark}}?",
+      "deleteselected": "¿Seguro que quieres eliminar {{count}} marcadores seleccionados?",
+      "deletefolder": "¿Seguro que quieres eliminar la carpeta {{- folder}}?",
+      "deletefromfolder": "¿Seguro que quieres quitar el marcador actual de esta carpeta?"
+    },
+    "detail": {
+      "deletetag": "Esta operación no se puede deshacer.",
+      "deletebookmark": "Esta operación no se puede deshacer.",
+      "deleteselected": "Esta operación no se puede deshacer.",
+      "deletefolder": "Al eliminar esta carpeta también se eliminarán los marcadores que contiene",
+      "deletefromfolder": "Quitar el marcador actual de esta carpeta también eliminará el marcador."
+    },
+    "button": {
+      "cancel": "Cancelar",
+      "deletetag": "Eliminar Etiqueta",
+      "deletebookmark": "Eliminar Marcador",
+      "deleteselected": "Eliminar {{count}} Marcadores",
+      "deletefolder": "Eliminar Carpeta",
+      "deletefromfolder": "Eliminar Marcador"
+    }
+  },
+  "sidebar": {
+    "filter": {
+      "all": "Todos los Marcadores",
+      "untagged": "sin etiquetas",
+      "favicon": "Favicon",
+      "description": "Descripción",
+      "url": "URL",
+      "created": "Creado",
+      "modified": "Modificado",
+      "folders": "Carpetas",
+      "tags": "Etiquetas"
+    },
+    "title": {
+      "folders": "Carpetas",
+      "tags": "Etiquetas",
+      "columns": "Columnas"
+    },
+    "search": "Buscar"
+  },
+  "tagtoolbar": {
+    "and": "Y",
+    "or": "O",
+    "clear": "Borrar etiquetas"
+  },
+  "button": {
+    "home": "Inicio",
+    "newfolder": "Nueva Carpeta…",
+    "new": "Añadir Nuevo Marcador"
+  },
+  "folderstrip": {
+    "label": "Subcarpetas",
+    "homehint": "Mover a Inicio (raíz)"
+  },
+  "sync": {
+    "syncing": "Sincronizando…"
+  },
+  "view": {
+    "toggle": "Cambiar vista",
+    "list": "Lista",
+    "cards": "Tarjetas",
+    "empty": "Ningún marcador coincide con los filtros actuales."
+  },
+  "export": {
+    "notification": {
+      "body": "el archivo: {{name}}\nse ha guardado en: {{path}}"
+    }
+  }
+}

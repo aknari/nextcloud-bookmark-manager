@@ -1,0 +1,76 @@
+{
+  "header": "Auto-Tag Bookmarks",
+  "button": {
+    "start": "Start",
+    "acceptall": "Accept All",
+    "apply": "Apply to Server",
+    "applying": "Applying…",
+    "applying_progress": "Applying… {{current}}/{{total}}",
+    "close": "Close",
+    "cancelling": "Cancelling…"
+  },
+  "label": {
+    "model": "AI Model",
+    "maxtags": "Max Tags per Bookmark",
+    "maxsession": "Max Items to Process",
+    "selectedbm": "Selected Bookmarks",
+    "selected_count": "{{selected}} bookmarks selected",
+    "none_selected": "None selected — select bookmarks (Ctrl+Click) or a folder first",
+    "cleartags": "Clear existing tags first",
+    "consider_existing": "Consider existing tags (reuse my vocabulary)",
+    "profile": "Tagging Profile",
+    "noprofile": "None (AI decides freely)",
+    "defaultprofile": "Default (built-in)",
+    "notagsuffix": " (no tags)",
+    "profilepreview_none": "(no tags in this profile)",
+    "folder": "Folder to Tag",
+    "bookmarks": "Bookmarks in Folder",
+    "includesub": "Include bookmarks in subfolders",
+    "capnotice": "This run will process only <strong>{{cap}}</strong> of <strong>{{total}}</strong> bookmarks (AI session cap).",
+    "overridecap": "Process all for this run (temporary)",
+    "nofolder": "No bookmarks found in this folder — select bookmarks or a folder first"
+  },
+  "hint": {
+    "profile": "Optional: prefer tags from a learned profile's vocabulary",
+    "consider_existing": "The AI may reuse tags you already use instead of inventing new ones"
+  },
+  "error": {
+    "noconfig": "No AI configuration found. Go to Bookmarks > AI Settings to set up your API key first.",
+    "notable": "Error: could not access bookmark table.",
+    "noselected": "No bookmarks are selected. Select bookmarks first (Ctrl+Click or Shift+Click).",
+    "nobookmarks": "No bookmarks found to process.",
+    "notags_title": "No Tags to Apply",
+    "notags_content": "No bookmarks have accepted tags. Toggle tags or use Accept All first."
+  },
+  "progress": {
+    "starting": "Starting…",
+    "processing": "Processing {{current}} of {{total}}: {{title}}",
+    "quota": "API quota reached — retrying in {{wait}}s…",
+    "quota_minute_title": "API quota reached — retrying automatically",
+    "quota_minute": "The per-minute API limit was reached. Retrying in <strong>{{wait}}s</strong> (attempt {{attempt}} of {{max}}). You can leave this window open — it will continue on its own.",
+    "quota_daily_title": "Daily API quota reached",
+    "quota_daily": "The free daily quota has been exhausted. It resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window with peace of mind — nothing has been changed and no bookmarks have been lost.",
+    "quota_stopped_title": "Run stopped — API quota exhausted",
+    "quota_stopped": "The run was stopped because the API quota is still exhausted after several retries. This is very likely the daily limit — it resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window with peace of mind — nothing has been changed and no bookmarks have been lost."
+  },
+  "summary": {
+    "processed": "Processed <strong>{{total}}</strong> bookmarks. <strong>{{accepted}}</strong> have suggested tags ({{tags}} total tags).",
+    "quota_box": "⚠ <strong>The run was stopped by the API quota.</strong> Only <strong>{{processed}}</strong> of {{total}} bookmarks were processed — the remaining <strong>{{left}}</strong> were NOT processed and keep their current tags. The quota resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window — nothing else has been changed."
+  },
+  "results": {
+    "empty": "No bookmarks were processed.",
+    "error": "Error: {{error}}",
+    "notags": "No relevant tags found",
+    "quotaerror": "API quota reached — run stopped",
+    "clicktoggle": "Click to toggle"
+  },
+  "done": {
+    "title": "Auto-Tag Complete",
+    "applied": "Applied tags to {{applied}} bookmarks.",
+    "failed": "{{failed}} failed."
+  },
+  "status": {
+    "scanned": "Run complete — review the suggested tags below.",
+    "applied": "Tags applied to the server ({{count}} bookmarks)."
+  }
+}

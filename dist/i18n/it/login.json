@@ -11,7 +11,8 @@
     "button": {
       "cancel": "Annulla",
       "logout": "‹ Disconnettersi",
-      "login": "Accesso ›"
+      "login": "Accesso ›",
+      "offline": "Continua offline"
     }
   }
 }

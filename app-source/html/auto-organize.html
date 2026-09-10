@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="">
+	<head>
+		<meta charset="utf-8" />
+		<title>Nextcloud Bookmark Manager - Auto-Organize Bookmarks</title>
+		<script>
+			require( '../js/theme.min' )
+		</script>
+		<link rel="stylesheet" type="text/css" href="../css/modal.min.css" media="all">
+		<style>
+			/* Add padding so content isn't flush with window edges */
+			#auto-org-wrap { padding: 16px 30px 0; }
+			#auto-org-wrap li { padding-bottom: 0; }
+			#auto-org-wrap label {
+				float: none !important;
+				display: block !important;
+				width: auto !important;
+				text-align: left !important;
+				padding-right: 0 !important;
+				font-size: 12px !important;
+				line-height: 1.4 !important;
+				font-weight: 600;
+				margin-bottom: 4px;
+			}
+			#auto-org-wrap label::after { content: none !important; }
+			
+			.progress-container { margin: 16px 0; }
+			.progress-bar {
+				width: 100%; height: 8px; border-radius: 4px;
+				background: var(--tab-dividers); overflow: hidden;
+			}
+			.progress-fill {
+				height: 100%; width: 0%; border-radius: 4px;
+				background: var(--accent); transition: width .3s ease;
+			}
+			.progress-text { font-size: 12px; color: var(--text); margin-top: 6px; opacity: .7; }
+			
+			.section { margin-bottom: 14px; }
+			.section-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+			.section-value { font-size: 13px; color: var(--text); margin-bottom: 2px; }
+			
+			#results-list { max-height: 300px; overflow-y: auto; margin: 10px 0; }
+			
+			.folder-group {
+				margin-bottom: 8px; border-radius: 4px;
+				background: var(--stripe-even); border: 1px solid var(--tab-dividers);
+				font-size: 12px; line-height: 1.4; overflow: hidden;
+			}
+			.folder-group .group-header {
+				padding: 7px 10px; font-weight: 600; color: var(--text);
+				display: flex; align-items: center; gap: 6px;
+				background: var(--tab-dividers); cursor: pointer;
+			}
+			.folder-group .group-header .group-icon { font-size: 13px; }
+			.folder-group .group-header .group-name { flex: 1 1 auto; }
+			.folder-group .group-header .group-count {
+				font-size: 11px; font-weight: 500; opacity: .7;
+				background: var(--stripe-even); padding: 1px 7px; border-radius: 8px;
+			}
+			.folder-group .group-header .new-badge {
+				font-size: 10px; font-weight: 700; letter-spacing: .03em;
+				background: var(--accent); color: #fff; padding: 1px 6px; border-radius: 3px;
+			}
+			.folder-group .group-items { padding: 4px 10px; }
+			
+			.move-item {
+				display: flex; align-items: center; gap: 6px;
+				padding: 4px 2px; cursor: pointer;
+				border-bottom: 1px solid var(--tab-dividers);
+			}
+			.move-item:last-child { border-bottom: none; }
+			.move-item .move-check { font-size: 13px; flex: none; }
+			.move-item .move-title {
+				flex: 1 1 auto; color: var(--text);
+				white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+			}
+			.move-item.rejected { opacity: .4; }
+			.move-item.rejected .move-title { text-decoration: line-through; }
+			.move-item:hover { background: var(--accent-light); }
+			.move-item:hover .move-title { color: #fff; }
+			
+			.summary-stats {
+				font-size: 12px; color: var(--text); padding: 8px 10px;
+				background: var(--stripe-even); border-radius: 4px; margin: 8px 0;
+			}
+			.summary-stats strong { font-weight: 600; }
+			
+			.empty-state {
+				text-align: center; padding: 30px 20px; font-size: 13px;
+				color: var(--text); opacity: .5;
+			}
+			
+			.quota-notice {
+				margin: 10px 0;
+				padding: 10px 12px;
+				border-radius: 6px;
+				background: #fff3cd;
+				border: 1px solid #ffe08a;
+				color: #7a5c00;
+				font-size: 12px;
+				line-height: 1.5;
+			}
+			.quota-notice .quota-title {
+				font-weight: 700;
+				margin-bottom: 4px;
+			}
+			
+			.scroll { display: flex; flex-direction: column; overflow: hidden; }
+			#auto-org-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+			footer {
+				display: grid;
+				grid-template-columns: 1fr auto 1fr;
+				align-items: center;
+				gap: 8px;
+				padding: 10px 0;
+				border-top: 1px solid var(--tab-dividers);
+				margin-top: 6px;
+				flex-shrink: 0;
+			}
+			footer .left,
+			footer .right {
+				float: none;
+				display: flex;
+				gap: 8px;
+				align-items: center;
+			}
+			footer .left { justify-self: start; }
+			footer .right { justify-self: end; }
+			.action-status {
+				font-size: 11px;
+				color: var(--text);
+				opacity: .7;
+				line-height: 1.3;
+				max-width: 320px;
+				text-align: center;
+				justify-self: center;
+			}
+			.ui-button.done {
+				box-shadow: inset 0 0 0 1.5px var(--accent);
+				color: var(--accent);
+			}
+		</style>
+	</head>
+	
+	<body>
+		<header data-i18n="autoorg:header">Auto-Organize Bookmarks</header>
+		
+		<div class="scroll">
+			<div id="auto-org-wrap">
+				
+				<!-- Step 1: Settings Summary & Start -->
+				<div id="step-start" class="section">
+					<ul>
+						<li>
+							<div class="section-title" data-i18n="autoorg:label.folder">Folder to Organize</div>
+							<div class="section-value" id="cfg-folder">—</div>
+						</li>
+						<li>
+							<div class="section-title" data-i18n="autoorg:label.bookmarks">Bookmarks in Folder</div>
+							<div class="section-value" id="cfg-count">—</div>
+						</li>					<li>
+						<div class="section-title" data-i18n="autoorg:label.model">AI Model</div>
+						<div class="section-value" id="cfg-model">—</div>
+					</li>
+					<li style="padding-bottom:6px;">
+						<label for="profile-select" data-i18n="autoorg:label.profile">Organization Profile</label>
+						<select id="profile-select" style="width:100%;padding:6px 8px;border:1px solid var(--tab-dividers);border-radius:4px;font-size:12px;background:var(--stripe-even);color:var(--text);"></select>
+						<div class="hint" data-i18n="autoorg:hint.profile">Optional: apply a learned organizational philosophy</div>
+					</li>
+					<li style="padding-bottom:6px;">
+						<label for="dest-folder" data-i18n="autoorg:label.dest">Destination Folder</label>
+						<select id="dest-folder" style="width:100%;padding:6px 8px;border:1px solid var(--tab-dividers);border-radius:4px;font-size:12px;background:var(--stripe-even);color:var(--text);"></select>
+					</li>
+					<li style="padding-bottom:6px;">
+						<label for="chk-consider-existing" style="display:flex !important;align-items:center;gap:6px;cursor:pointer;">
+							<input type="checkbox" id="chk-consider-existing" style="margin:0;flex:none;" checked>
+							<span data-i18n="autoorg:label.consider_existing">Consider existing folders (reuse what's already there)</span>
+						</label>
+						<div class="hint" data-i18n="autoorg:hint.consider_existing">When off, the previous folder structure is discarded and the AI reorganizes from scratch using only the selected profile</div>
+					</li>
+					<li style="padding-bottom:6px;">
+						<label for="chk-delete-empty" style="display:flex !important;align-items:center;gap:6px;cursor:pointer;">
+							<input type="checkbox" id="chk-delete-empty" style="margin:0;flex:none;" checked>
+							<span data-i18n="autoorg:label.deleteempty">Delete empty folders left behind after organizing</span>
+						</label>
+					</li>
+					<li style="padding-bottom:6px;">
+						<label for="chk-include-subfolders" style="display:flex !important;align-items:center;gap:6px;cursor:pointer;">
+							<input type="checkbox" id="chk-include-subfolders" style="margin:0;flex:none;">
+							<span data-i18n="autoorg:label.includesub">Include bookmarks in subfolders</span>
+						</label>
+					</li>
+					<li style="padding-bottom:6px;">
+						<label for="max-per-folder" data-i18n="autoorg:label.maxfolder">Max items per folder (bookmarks + subfolders)</label>
+						<input type="number" id="max-per-folder" min="1" max="100" value="" style="width:120px;padding:6px 8px;border:1px solid var(--tab-dividers);border-radius:4px;font-size:12px;background:var(--stripe-even);color:var(--text);">
+						<div class="hint" data-i18n="autoorg:hint.maxfolder">Soft limit: folders above ~this many items are split into balanced subfolders; groups near the limit stay together and single-item folders are merged.</div>
+						<label for="min-folder-items" data-i18n="autoorg:label.minfolder">Min bookmarks per new folder</label>
+						<input type="number" id="min-folder-items" min="2" max="4" value="2" style="width:120px;padding:6px 8px;border:1px solid var(--tab-dividers);border-radius:4px;font-size:12px;background:var(--stripe-even);color:var(--text);">
+						<div class="hint" data-i18n="autoorg:hint.minfolder">New folders created by this run with fewer than this many bookmarks are merged into the closest sibling folder (or moved one level up). Prevents folders with a single bookmark. Existing folders are respected.</div>
+					</li>
+					</ul>
+					
+					<div id="cap-notice" style="display:none;background:#fff3cd;color:#856404;padding:8px 10px;border-radius:4px;font-size:12px;margin-bottom:10px;">
+						<div id="cap-text"></div>
+						<label for="chk-override-cap" style="display:flex !important;align-items:center;gap:6px;cursor:pointer;margin-top:6px;">
+							<input type="checkbox" id="chk-override-cap" style="margin:0;flex:none;">
+							<span data-i18n="autoorg:label.overridecap">Process all for this run (temporary)</span>
+						</label>
+					</div>
+					
+					<div id="cfg-errors" class="section-value" style="color:#721c24;background:#f8d7da;padding:8px 10px;border-radius:4px;font-size:12px;display:none;"></div>
+				</div>
+				
+				<!-- Step 2: Progress -->
+				<div id="step-progress" class="section" style="display:none;">
+					<div class="progress-container">
+						<div class="progress-bar">
+							<div class="progress-fill" id="progress-fill"></div>
+						</div>
+						<div class="progress-text" id="progress-text"></div>
+					</div>
+				</div>
+				
+				<!-- Step 3: Results Review -->
+				<div id="step-results" class="section" style="display:none;">
+					<div class="summary-stats" id="summary-stats"></div>
+					<div id="results-list"></div>
+				</div>
+				
+				<!-- Visible API-quota banner: shown while waiting out a rate limit or when
+				     the daily quota is exhausted, so the user knows they can leave safely -->
+				<div id="quota-notice" class="quota-notice" style="display:none;">
+					<div class="quota-title" id="quota-title"></div>
+					<div class="quota-body" id="quota-body"></div>
+				</div>
+				
+			</div>
+			
+			<footer>
+				<span class="left">
+					<button id="btn-start" class="ui-button" type="button" data-i18n="autoorg:button.start">Start</button>
+					<button id="btn-clean-empty" class="ui-button" type="button" data-i18n="autoorg:button.cleanempty">Delete Empty Folders…</button>
+				</span>
+				<span id="action-status" class="action-status"></span>
+				<span class="right">
+					<button id="btn-accept-all" class="ui-button" type="button" data-i18n="autoorg:button.acceptall" style="display:none;">Accept All</button>
+					<button id="btn-apply" class="ui-button" type="button" data-i18n="autoorg:button.apply" style="display:none;">Apply to Server</button>
+					<button id="btn-close" class="ui-button" type="button" data-i18n="autoorg:button.close">Close</button>
+				</span>
+			</footer>
+		</div>
+		
+		<script>
+			require( '../js/modal-auto-organize.min' )
+		</script>
+	</body>
+</html>

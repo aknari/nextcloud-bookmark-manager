@@ -11,7 +11,8 @@
     "button": {
       "cancel": "Cancel",
       "logout": "‹ Logout",
-      "login": "Login ›"
+      "login": "Login ›",
+      "offline": "Continue offline"
     }
   }
 }

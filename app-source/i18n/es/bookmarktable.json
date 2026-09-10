@@ -1,0 +1,19 @@
+{
+  "header": {
+    "details": "Detalles",
+    "title": "Título",
+    "description": "Descripción",
+    "url": "Url",
+    "created": "Creado",
+    "modified": "Modificado",
+    "folders": "Carpetas",
+    "tags": "Etiquetas"
+  },
+  "footer": {
+    "nodata": "No hay datos disponibles",
+    "zero": "<span class=\"text\">No se encontraron marcadores que coincidan</span>",
+    "info": "Mostrando <b>_TOTAL_</b><span class=\"text\"> marcadores</span>",
+    "empty": "<span class=\"text\">Mostrando </span><b>0</b><span class=\"text\"> a 0 de 0 marcadores</span>",
+    "filtered": "<span class=\"filtered\">(filtrado de _MAX_ marcadores)</span>"
+  }
+}

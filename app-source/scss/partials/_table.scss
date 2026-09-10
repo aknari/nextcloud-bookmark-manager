@@ -122,6 +122,16 @@ table.dataTable.hover tbody tr[role="row"]:hover, table.dataTable.display tbody 
 	background-color: var(--select-sort);
 }
 
+table.dataTable tbody tr.focused td {
+	
+	box-shadow: inset 3px 0 0 var(--focus-ring, #4a90d9);
+}
+
+table.dataTable tbody tr.selected.focused td {
+	
+	box-shadow: inset 3px 0 0 rgba(255,255,255,0.7);
+}
+
 table.dataTable.hover tbody tr:hover td, table.dataTable.display tbody tr:hover td {
 	
 	color: var(--text);

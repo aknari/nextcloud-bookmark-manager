@@ -1,0 +1,20 @@
+{
+  "header": "Editar carpeta:",
+  "label": {
+    "parent": "carpeta principal",
+    "name": "nombre"
+  },
+  "select": {
+    "option": {
+      "home": "Inicio"
+    }
+  },
+  "input": {
+    "placeholder": "alfanumérico",
+    "required": "este campo es obligatorio"
+  },
+  "button": {
+    "cancel": "Cancelar",
+    "submit": "Actualizar Carpeta"
+  }
+}

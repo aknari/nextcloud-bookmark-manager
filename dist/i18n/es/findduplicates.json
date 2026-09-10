@@ -1,0 +1,19 @@
+{
+	"header": "Marcadores Duplicados",
+	"button": {
+		"close": "Cerrar",
+		"merge": "Fusionar {{count}}",
+		"merging": "Fusionando…"
+	},
+	"label": {
+		"folders": "Carpetas",
+		"tags": "Etiquetas"
+	},
+	"error": {
+		"nodata": "No hay datos de marcadores disponibles."
+	},
+	"summary": {
+		"none": "No se encontraron marcadores duplicados.",
+		"found": "Se encontraron {{count}} grupos de duplicados."
+	}
+}

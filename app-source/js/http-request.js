@@ -1,0 +1,301 @@
+'use strict'
+
+//note(dgmid): shared HTTP helpers for modal windows — Node's built-in http/https avoids
+//CORS, ignores SSL cert issues (rejectUnauthorized:false) and uses a real browser
+//User-Agent. Used by check-broken-links and repair-titles.
+
+const http = require( 'http' )
+const https = require( 'https' )
+const { URL } = require( 'url' )
+
+
+
+/**
+ * Make an HTTP request using Node's built-in http/https module.
+ * Returns { status, bodyLength, body? } on success, throws on error.
+ * When captureBody is true, the response body is decoded (UTF-8 when the byte
+ * stream is valid UTF-8, otherwise Latin-1) and returned as `body`, capped at 50KB.
+ */
+module.exports.nodeRequest = function( url, method, timeoutMs, redirectCount, captureBody ) {
+	
+	return new Promise( (resolve, reject) => {
+		
+		let parsedUrl
+		try {
+			parsedUrl = new URL( url )
+		} catch( e ) {
+			return reject( new Error( 'invalid URL' ) )
+		}
+		
+		// Guard flag: prevents double resolve/reject when multiple events fire
+		// (e.g., totalTimer fires -> reject, then req.destroy emits error -> reject again)
+		let settled = false
+		function safeResolve( val ) { if( !settled ) { settled = true; resolve( val ) } }
+		function safeReject( err )  { if( !settled ) { settled = true; reject( err ) } }
+		
+		const lib = parsedUrl.protocol === 'https:' ? https : http
+		
+		const options = {
+			hostname: parsedUrl.hostname,
+			port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+			path: parsedUrl.pathname + parsedUrl.search,
+			method: method,
+			timeout: timeoutMs,
+			// Use a real browser User-Agent to avoid blocks
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			},
+			// Don't reject on SSL certificate issues (many sites use self-signed or CDN certs)
+			rejectUnauthorized: false
+		}
+		
+		// totalTimer declared OUTSIDE the response callback so it's accessible
+		// from req.on('error') and req.on('timeout') handlers below.
+		let totalTimer
+		
+		const req = lib.request( options, (res) => {
+			
+			let chunks = []
+			let bytes = 0
+			
+			// Total timeout: if the request (including body download) takes longer
+			// than timeoutMs from start, abort. This prevents slow body streams
+			// from hanging forever (the socket idle timeout alone won't help when
+			// data arrives slowly).
+			totalTimer = setTimeout( () => {
+				
+				req.destroy()
+				safeReject( new Error( 'timeout' ) )
+			}, timeoutMs )
+			
+			if( captureBody ) {
+				
+				// Collect body data for size/content analysis (cap at 50KB)
+				res.on( 'data', (chunk) => {
+					
+					if( bytes >= 51200 ) {
+						res.destroy()
+						return
+					}
+					
+					let take = Math.min( chunk.length, 51200 - bytes )
+					chunks.push( chunk.slice( 0, take ) )
+					bytes += take
+				})
+				
+			} else {
+				
+				// Discard response body (we only care about status code)
+				res.resume()
+			}
+			
+			res.on( 'end', () => {
+				
+				clearTimeout( totalTimer )
+				
+				// Follow redirects (up to 5)
+				const redirectCountMax = redirectCount || 0
+				
+				if( (res.statusCode === 301 || res.statusCode === 302 ||
+					 res.statusCode === 307 || res.statusCode === 308) &&
+					 res.headers.location && redirectCountMax < 5 ) {
+					
+					// Resolve relative redirect URLs
+					let redirectUrl = res.headers.location
+					if( !redirectUrl.startsWith('http') ) {
+						redirectUrl = new URL( redirectUrl, url ).href
+					}
+					
+					// Follow the redirect
+					module.exports.nodeRequest( redirectUrl, method, timeoutMs, redirectCountMax + 1, captureBody )
+						.then( safeResolve )
+						.catch( safeReject )
+					
+					return
+				}
+				
+				//note(dgmid): the decode + settle is wrapped in try/catch so a failure can
+				//NEVER leave the promise pending. A throw inside this event handler would
+				//otherwise hang the caller forever (the totalTimer was already cleared),
+				//freezing bulk workers like check-broken-links.
+				try {
+					
+					if( captureBody ) {
+						
+						let body = Buffer.concat( chunks )
+						// Decode as UTF-8 when valid, else Latin-1 (older sites). bodyLength is the
+						// DECODED character count — check-broken-links' SPA threshold (3KB) is tuned
+						// against that, so keep the semantics in mind if the threshold is adjusted.
+						let text = isUtf8( body ) ? body.toString( 'utf8' ) : body.toString( 'latin1' )
+						
+						safeResolve({ status: res.statusCode, bodyLength: text.length, body: text })
+						
+					} else {
+						
+						safeResolve({ status: res.statusCode })
+					}
+					
+				} catch( decodeErr ) {
+					
+					safeReject( decodeErr )
+				}
+			})
+		})
+		
+		req.on( 'error', (e) => {
+			clearTimeout( totalTimer )
+			safeReject( e )
+		})
+		
+		req.on( 'timeout', () => {
+			clearTimeout( totalTimer )
+			req.destroy()
+			safeReject( new Error( 'timeout' ) )
+		})
+		
+		req.end()
+	})
+}
+
+
+
+/**
+ * Portable UTF-8 validity check. Buffer.isUtf8 (Node 20.13+) is NOT available on the
+ * Buffer object exposed in the Electron renderer, so we validate the byte stream by
+ * hand. Used to decide between UTF-8 and Latin-1 decoding of response bodies.
+ */
+function isUtf8( buf ) {
+	
+	let i = 0,
+		len = buf.length
+	
+	while( i < len ) {
+		
+		let b = buf[i]
+		
+		if( b < 0x80 ) { i++; continue }
+		
+		if( b >= 0xC2 && b <= 0xDF ) {
+			
+			if( i + 1 >= len || ( buf[i+1] & 0xC0 ) !== 0x80 ) return false
+			i += 2
+			
+		} else if( b >= 0xE0 && b <= 0xEF ) {
+			
+			if( i + 2 >= len || ( buf[i+1] & 0xC0 ) !== 0x80 || ( buf[i+2] & 0xC0 ) !== 0x80 ) return false
+			i += 3
+			
+		} else if( b >= 0xF0 && b <= 0xF4 ) {
+			
+			if( i + 3 >= len || ( buf[i+1] & 0xC0 ) !== 0x80 || ( buf[i+2] & 0xC0 ) !== 0x80 || ( buf[i+3] & 0xC0 ) !== 0x80 ) return false
+			i += 4
+			
+		} else {
+			
+			return false
+		}
+	}
+	
+	return true
+}
+
+
+
+function decodeHtmlEntities( s ) {
+	
+	const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+	
+	return s.replace( /&(#x?[0-9a-f]+|[a-z]+);/gi, function( m, ent ) {
+		
+		if( ent[0] === '#' ) {
+			
+			let n = ent[1].toLowerCase() === 'x'
+				? parseInt( ent.slice( 2 ), 16 )
+				: parseInt( ent.slice( 1 ), 10 )
+			
+			// Guard out-of-range code points (&#99999999;) — String.fromCodePoint would throw
+			return ( isNaN( n ) || n < 0 || n > 0x10FFFF ) ? m : String.fromCodePoint( n )
+		}
+		
+		return named[ ent.toLowerCase() ] || m
+	})
+}
+
+
+
+function cleanText( s ) {
+	
+	return s
+		.replace( /<[^>]+>/g, ' ' )
+		.replace( /\s+/g, ' ' )
+		.trim()
+}
+
+
+
+/**
+ * Fetch the <title> and the meta description (og:description / name=description) of a
+ * page. Returns { title, description } — each null when absent — or null when the page
+ * can't be reached, returns a non-2xx status, or isn't HTML. Title capped at 300 chars,
+ * description at 500.
+ */
+module.exports.fetchPageMeta = function( url, timeoutMs ) {
+	
+	return module.exports.nodeRequest( url, 'GET', timeoutMs || 12000, 0, true )
+		.then( res => {
+			
+			if( !res || res.status < 200 || res.status >= 300 ) return null
+			
+			let html = res.body || ''
+			
+			let meta = { title: null, description: null }
+			
+			let m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec( html )
+			
+			if( m ) {
+				
+				let t = decodeHtmlEntities( cleanText( m[1] ) )
+				
+				if( t ) {
+					
+					if( t.length > 300 ) t = t.substring( 0, 300 ).trim()
+					
+					meta.title = t
+				}
+			}
+			
+			// meta description — match either name="description" or property="og:description",
+			// regardless of attribute order or quote style (double, single or unquoted)
+			let metaTags = html.match( /<meta\b[^>]*>/gi ) || []
+			
+			for( let tag of metaTags ) {
+				
+				// (?<![\w-]) guards against data-name= / x-property= / data-content=
+				if( !/(?<![\w-])(?:name|property)\s*=\s*["']?\s*(?:og:)?description\b/i.test( tag ) ) continue
+				
+				// capture the content value respecting the quote style actually used, so
+				// inner quotes are kept (content="John's book" must not stop at the ')
+				let content = /(?<![\w-])content\s*=\s*"([^"]*)"/i.exec( tag )
+					|| /(?<![\w-])content\s*=\s*'([^']*)'/i.exec( tag )
+					|| /(?<![\w-])content\s*=\s*([^\s"'>]+)/i.exec( tag )
+				
+				if( content && content[1].trim() ) {
+					
+					let d = decodeHtmlEntities( cleanText( content[1] ) )
+					
+					if( d ) {
+						
+						if( d.length > 500 ) d = d.substring( 0, 500 ).trim()
+						
+						meta.description = d
+					}
+					
+					break
+				}
+			}
+			
+			return meta
+		})
+		.catch( () => null )
+}
+

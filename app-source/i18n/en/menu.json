@@ -12,14 +12,27 @@
     "newfolder": "New Folder…",
     "sync": "Sync all Bookmarks",
     "favicons": "Regenerate Favicons",
-    "export": "Export Bookmarks File…"
+    "import": "Import Bookmarks File…",
+    "duplicates": "Find Duplicate Bookmarks…",
+    "broken": "Check Broken Links…",
+    "export": "Export Bookmarks File…",
+    "selectall": "Select All",
+    "deselectall": "Deselect All",
+    "deleteselected": "Delete Selected Bookmarks…",
+    "autotag": "Auto-Tag Bookmarks…",
+    "autoorg": "Auto-Organize Bookmarks…",
+    "learn": "Learn Folder Structure…",
+    "ai": "AI Settings…",
+    "repairtitles": "Repair Titles…",
+    "exportaz": "Export Bookmarks File (A–Z)…"
   },
   "edit": {
     "edit": "Edit",
     "find": "Find…"
   },
   "view": {
-    "view": "View"
+    "view": "View",
+    "sortalpha": "Sort Bookmarks A–Z"
   },
   "window": {
     "window": "Window",

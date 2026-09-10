@@ -22,6 +22,13 @@ module.exports.menuFolders = function ( winId ) {
 		
 		const foldersMenuTemplate = [
 			{
+				label: i18n.t('menusidebar:folders.edit', 'Edit {{- folder}} Folder…', { folder: unescape(folder) }),
+				click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('edit-folder', message) }
+			},
+			{
+				type: 'separator'
+			},
+			{
 				label: i18n.t('menusidebar:folders.delete', 'Delete {{- folder}} Folder…', { folder: unescape(folder) }),
 				click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('delete-folder', message) }
 			}

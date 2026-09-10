@@ -1,0 +1,43 @@
+{
+	"header": "Check Broken Links",
+	"degraded": {
+		"note": "Server unreachable or session rejected — broken links will be detected but NOT saved to the server."
+	},
+	"button": {
+		"close": "Close",
+		"start": "Start Check",
+		"cancel": "Cancel",
+		"resume": "Continue Checking",
+		"tagnow": "Tag {{count}} broken now",
+		"close_nosave": "Close without saving"
+	},
+	"label": {
+		"selectedbm": "Selected Bookmarks",
+		"selected_count": "{{selected}} bookmarks selected",
+		"folder": "Folder to Check",
+		"bookmarks": "Bookmarks in Scope",
+		"includesub": "Include bookmarks in subfolders",
+		"all": "Scope",
+		"all_value": "All bookmarks"
+	},
+	"error": {
+		"nodata": "No bookmark data available.",
+		"noscope": "No bookmarks to check in the current scope."
+	},
+	"status": {
+		"cleaning": "Cleaning previous \"broken\" tag…",
+		"fetching": "Fetching bookmarks…",
+		"starting": "Checking {{total}} bookmarks…",
+		"checking": "Checking {{current}} of {{total}}…",
+		"tagging": "Tagging broken links… ({{tagged}}/{{total}})"
+	},
+	"summary": {
+		"none": "All {{total}} bookmarks are accessible.",
+		"found": "{{count}} broken link(s) found.",
+		"done": "Done! {{count}} bookmark(s) tagged as \"broken\"."
+	},
+	"interrupt": {
+		"title": "Check interrupted",
+		"text": "{{checked}} of {{total}} bookmarks checked — {{broken}} broken found (not yet tagged)."
+	}
+}

@@ -1,4 +1,12 @@
 {
+  "degraded": {
+    "banner": "Server non raggiungibile o sessione rifiutata — modalità sola lettura. I tuoi segnalibri sono al sicuro nella copia locale.",
+    "retry": "Riprova connessione",
+    "export": "Esporta copia…",
+    "noexport": "Non c'è ancora una copia locale da esportare. Connettiti al server una volta per crearne una.",
+    "title": "Modalità offline",
+    "writeblocked": "Il server non risponde o ha rifiutato la sessione, quindi le modifiche non vengono applicate. I tuoi segnalibri sono al sicuro nella copia locale."
+  },
   "errorbox": {
     "title": {
       "deletebookmark": "Errore: elimina segnalibro",
@@ -6,19 +14,22 @@
     },
     "content": {
       "deletebookmark": "È necessario selezionare un segnalibro per eliminarlo",
-      "editbookmark": "È necessario selezionare un segnalibro per modificarlo"
+      "editbookmark": "È necessario selezionare un segnalibro per modificarlo",
+      "deleteselected": "Nessun segnalibro selezionato. Usa Ctrl+Click o Shift+Click per selezionare più segnalibri, quindi riprova."
     }
   },
   "dialog": {
     "message": {
       "deletetag": "Sei sicuro di voler eliminare il tag {{- tag}}?",
       "deletebookmark": "Sei sicuro di voler eliminare il segnalibro {{- bookmark}}?",
+      "deleteselected": "Sei sicuro di voler eliminare {{count}} segnalibri selezionati?",
       "deletefolder": "Sei sicuro di voler eliminare la cartella {{- folder}}?",
       "deletefromfolder": "Sei sicuro di voler rimuovere il segnalibro corrente da questa cartella?"
     },
     "detail": {
       "deletetag": "Questa operazione non è reversibile.",
       "deletebookmark": "Questa operazione non è reversibile.",
+      "deleteselected": "Questa operazione non è reversibile.",
       "deletefolder": "L’eliminazione di questa cartella eliminerà anche tutti i segnalibri in essa contenuti",
       "deletefromfolder": "L’eliminazione del segnalibro corrente da questa cartella eliminerà anche il segnalibro."
     },
@@ -26,6 +37,7 @@
       "cancel": "Annulla",
       "deletetag": "Elimina tag",
       "deletebookmark": "Elimina segnalibro",
+      "deleteselected": "Elimina {{count}} segnalibri",
       "deletefolder": "Elimina cartella",
       "deletefromfolder": "Elimina segnalibro"
     }
@@ -34,6 +46,7 @@
     "filter": {
       "all": "Tutti i segnalibri",
       "untagged": "senza tag",
+      "favicon": "Favicon",
       "description": "Descrizione",
       "url": "URL",
       "created": "Creato",
@@ -48,10 +61,28 @@
     },
     "search": "Cerca"
   },
+  "tagtoolbar": {
+    "and": "AND",
+    "or": "OR",
+    "clear": "Cancella tag"
+  },
   "button": {
     "home": "Home",
     "newfolder": "Nuova cartella…",
     "new": "Aggiungi nuovo segnalibro"
+  },
+  "folderstrip": {
+    "label": "Sottocartelle",
+    "homehint": "Sposta nella Home (radice)"
+  },
+  "sync": {
+    "syncing": "Sincronizzazione…"
+  },
+  "view": {
+    "toggle": "Cambia visualizzazione",
+    "list": "Elenco",
+    "cards": "Schede",
+    "empty": "Nessun segnalibro corrisponde ai filtri attuali."
   },
   "export": {
     "notification": {

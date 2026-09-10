@@ -1,0 +1,90 @@
+<!doctype html><html lang=""><head><meta charset="utf-8"><title>Nextcloud Bookmark Manager - Learn Folder Structure</title><script>require( '../js/theme.min' )</script><link rel="stylesheet" type="text/css" href="../css/modal.min.css" media="all"><style>/* Add padding so content isn't flush with window edges */
+			#learn-wrap { padding: 16px 30px 0; }
+			#learn-wrap li { padding-bottom: 0; }
+			#learn-wrap label {
+				float: none !important;
+				display: block !important;
+				width: auto !important;
+				text-align: left !important;
+				padding-right: 0 !important;
+				font-size: 12px !important;
+				line-height: 1.4 !important;
+				font-weight: 600;
+				margin-bottom: 4px;
+			}
+			#learn-wrap label::after { content: none !important; }
+			
+			.progress-container { margin: 16px 0; }
+			.progress-bar {
+				width: 100%; height: 8px; border-radius: 4px;
+				background: var(--tab-dividers); overflow: hidden;
+			}
+			.progress-fill {
+				height: 100%; width: 0%; border-radius: 4px;
+				background: var(--accent); transition: width .3s ease;
+			}
+			.progress-text { font-size: 12px; color: var(--text); margin-top: 6px; opacity: .7; }
+			
+			.section { margin-bottom: 14px; }
+			.section-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+			.section-value { font-size: 13px; color: var(--text); margin-bottom: 2px; }
+			
+			#learn-wrap input[type="text"],
+			#learn-wrap textarea {
+				width: 100% !important;
+				box-sizing: border-box;
+				padding: 8px 10px;
+				border: 1px solid var(--tab-dividers);
+				border-radius: 4px;
+				font-size: 13px;
+				background: var(--stripe-even);
+				color: var(--text);
+			}
+			#learn-wrap textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+			
+			.folder-names-box {
+				background: var(--stripe-even);
+				border: 1px solid var(--tab-dividers);
+				border-radius: 4px;
+				padding: 8px 10px;
+				font-size: 12px;
+				color: var(--text);
+				line-height: 1.4;
+				max-height: 120px;
+				overflow-y: auto;
+			}
+			
+			.no-criterion {
+				background: #fff3cd; color: #856404;
+				border: 1px solid #ffeeba;
+				border-radius: 4px;
+				padding: 8px 10px;
+				font-size: 12px;
+				margin-bottom: 10px;
+			}
+			
+			.summary-stats {
+				font-size: 12px; color: var(--text); padding: 8px 10px;
+				background: var(--stripe-even); border-radius: 4px; margin: 8px 0;
+			}
+			
+			.scroll { display: flex; flex-direction: column; }
+			#learn-wrap { flex: 1 1 auto; }
+			footer {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: center;
+				align-items: center;
+				gap: 8px;
+				padding: 10px 0;
+				border-top: 1px solid var(--tab-dividers);
+				margin-top: 6px;
+				flex-shrink: 0;
+			}
+			footer .left,
+			footer .right {
+				float: none;
+				display: flex;
+				gap: 8px;
+				align-items: center;
+			}</style></head><body><header data-i18n="learn:header">Learn Folder Structure</header><div class="scroll"><div id="learn-wrap"><!-- Step 1: Settings Summary & Start --><div id="step-start" class="section"><ul><li><div class="section-title" data-i18n="learn:label.folder">Folder to Learn From</div><div class="section-value" id="cfg-folder">—</div></li><li><div class="section-title" data-i18n="learn:label.subfolders">Subfolders Found</div><div class="section-value" id="cfg-children">—</div></li><li><div class="section-title" data-i18n="learn:label.tags">Tags in Folder</div><div class="section-value" id="cfg-tags">—</div></li><li><div class="section-title" data-i18n="learn:label.model">AI Model</div><div class="section-value" id="cfg-model">—</div></li></ul><div class="hint" data-i18n="learn:hint.learn">The AI analyzes the subfolder names and sample bookmark titles to deduce the organizing criterion, which you can save as a reusable profile.</div><div id="cfg-errors" class="section-value" style="color:#721c24;background:#f8d7da;padding:8px 10px;border-radius:4px;font-size:12px;display:none;"></div></div><!-- Step 2: Progress --><div id="step-progress" class="section" style="display:none;"><div class="progress-container"><div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div><div class="progress-text" id="progress-text"></div></div></div><!-- Step 3: Detected Criterion Review --><div id="step-results" class="section" style="display:none;"><div class="no-criterion" id="no-criterion" style="display:none;"></div><ul><li style="padding-bottom:6px;"><label for="profile-name" data-i18n="learn:label.name">Profile Name</label> <input type="text" id="profile-name" placeholder="e.g. Academic subjects by university"></li><li style="padding-bottom:6px;"><label for="profile-description" data-i18n="learn:label.description">Detected Criterion</label> <textarea id="profile-description"></textarea></li><li style="padding-bottom:6px;"><div class="section-title" data-i18n="learn:label.foldernames">Folder Names in this Style</div><div class="folder-names-box" id="folder-names"></div></li><li style="padding-bottom:6px;"><div class="section-title" data-i18n="learn:label.taglist">Tag Vocabulary (from your bookmarks)</div><div class="folder-names-box" id="tag-list" style="max-height:110px;"></div><div class="hint" data-i18n="learn:hint.tags">These tags will be preferred (not forced) when auto-tagging with this profile. Uncheck any you don't want to keep.</div></li></ul></div></div><footer><span class="left"><button id="btn-start" class="ui-button" type="button" data-i18n="learn:button.analyze">Analyze Structure</button> </span><span class="right"><button id="btn-save" class="ui-button" type="button" data-i18n="learn:button.save" style="display:none;">Save Profile</button> <button id="btn-close" class="ui-button" type="button" data-i18n="learn:button.close">Close</button></span></footer></div><script>require( '../js/modal-learn-structure.min' )</script></body></html>

@@ -1,0 +1,43 @@
+{
+	"header": "Detectar Enlaces Rotos",
+	"degraded": {
+		"note": "El servidor no responde o ha rechazado la sesión — los enlaces rotos se detectarán pero NO se guardarán en el servidor."
+	},
+	"button": {
+		"close": "Cerrar",
+		"start": "Iniciar comprobación",
+		"cancel": "Cancelar",
+		"resume": "Continuar comprobando",
+		"tagnow": "Etiquetar {{count}} rotos ahora",
+		"close_nosave": "Cerrar sin guardar"
+	},
+	"label": {
+		"selectedbm": "Marcadores seleccionados",
+		"selected_count": "{{selected}} marcadores seleccionados",
+		"folder": "Carpeta a comprobar",
+		"bookmarks": "Marcadores en el alcance",
+		"includesub": "Incluir marcadores de subcarpetas",
+		"all": "Alcance",
+		"all_value": "Todos los marcadores"
+	},
+	"error": {
+		"nodata": "No hay datos de marcadores disponibles.",
+		"noscope": "No hay marcadores que comprobar en el alcance actual."
+	},
+	"status": {
+		"cleaning": "Limpiando la etiqueta anterior \"broken\"…",
+		"fetching": "Obteniendo marcadores…",
+		"starting": "Comprobando {{total}} marcadores…",
+		"checking": "Comprobando {{current}} de {{total}}…",
+		"tagging": "Etiquetando enlaces rotos… ({{tagged}}/{{total}})"
+	},
+	"summary": {
+		"none": "Los {{total}} marcadores son accesibles.",
+		"found": "Se encontraron {{count}} enlace(s) roto(s).",
+		"done": "¡Listo! {{count}} marcador(es) etiquetado(s) como \"broken\"."
+	},
+	"interrupt": {
+		"title": "Comprobación interrumpida",
+		"text": "{{checked}} de {{total}} marcadores comprobados — {{broken}} rotos encontrados (aún sin etiquetar)."
+	}
+}

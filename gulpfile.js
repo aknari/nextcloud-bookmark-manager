@@ -1,5 +1,5 @@
 const 	gulp 			= require('gulp'),
-		sass 			= require('gulp-sass'),
+		sass 			= require('gulp-sass')(require('sass')),
 		rename 			= require('gulp-rename'),
 		autoprefixer 	= require('gulp-autoprefixer'),
 		sourcemaps 		= require('gulp-sourcemaps'),
@@ -9,7 +9,7 @@ const 	gulp 			= require('gulp'),
 		pump 			= require('pump'),
 		iconutil 		= require('gulp-iconutil'),
 		exec 			= require('child_process').exec,
-		del				= require('del'),
+		fs				= require('fs'),
 		replace			= require('gulp-string-replace')
 
 
@@ -99,6 +99,68 @@ gulp.task('icon', () => {
 
 
 
+//note(dgmid): pack the AppIcon PNGs into a Windows .ico (PNG-compressed entries,
+//supported on Windows Vista+). No external tool needed — pure Node. Sizes commonly
+//expected by Windows: 16, 32, 128, 256 (the 1-byte ICO size field encodes 256 as 0).
+
+gulp.task('ico', done => {
+	
+	const fs 		= require('fs'),
+		  path 		= require('path')
+	
+	const srcDir 	= './app-source/assets/AppIcon.appiconset',
+		  outDir 	= './dist/assets/icon'
+	
+	const sizes = [
+		['icon_16x16@1x.png', 16],
+		['icon_32x32@1x.png', 32],
+		['icon_128x128@1x.png', 128],
+		['icon_256x256@1x.png', 256]
+	]
+	
+	const images = sizes.map( ([file, size]) => ({
+		data: fs.readFileSync( path.join( srcDir, file ) ),
+		size: size
+	}) )
+	
+	//note(dgmid): ICONDIR header
+	const count 	= images.length,
+		  header 	= Buffer.alloc( 6 )
+	
+	header.writeUInt16LE( 0, 0 )	// reserved
+	header.writeUInt16LE( 1, 2 )	// type: icon
+	header.writeUInt16LE( count, 4 )	// image count
+	
+	let offset 		= 6 + count * 16
+	const entries 	= [],
+		  blobs 	= []
+	
+	for( let img of images ) {
+		
+		const entry = Buffer.alloc( 16 )
+		
+		entry.writeUInt8( img.size >= 256 ? 0 : img.size, 0 )	// width (0 = 256)
+		entry.writeUInt8( img.size >= 256 ? 0 : img.size, 1 )	// height
+		entry.writeUInt8( 0, 2 )								// color count
+		entry.writeUInt8( 0, 3 )								// reserved
+		entry.writeUInt16LE( 1, 4 )								// planes
+		entry.writeUInt16LE( 32, 6 )							// bit count
+		entry.writeUInt32LE( img.data.length, 8 )				// bytes in resource
+		entry.writeUInt32LE( offset, 12 )						// image data offset
+		
+		offset += img.data.length
+		entries.push( entry )
+		blobs.push( img.data )
+	}
+	
+	fs.mkdirSync( outDir, { recursive: true } )
+	fs.writeFileSync( path.join( outDir, 'icon.ico' ), Buffer.concat( [ header, ...entries, ...blobs ] ) )
+	
+	done()
+})
+
+
+
 gulp.task('i18n', () => {
 	
 	return gulp.src(sourceLang)
@@ -109,7 +171,9 @@ gulp.task('i18n', () => {
 
 gulp.task('clean', done => {
 	
-	del.sync(['dist/**', '!dist'])
+	//note(dgmid): del@8 removed the del.sync API (ESM rewrite) — use Node's fs.rmSync
+	fs.rmSync( 'dist', { recursive: true, force: true } )
+	fs.mkdirSync( 'dist' )
 	
 	done()
 })
@@ -173,6 +237,7 @@ gulp.task('build', gulp.series(
 	'png',
 	'icns',
 	'icon',
+	'ico',
 	'devtools',
 	'webprefs'
 	

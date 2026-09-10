@@ -7,10 +7,38 @@ const path 		= require('path')
 const Store		= require( 'electron-store' )
 const store		= new Store()
 const $			= require( 'jquery' )
-const dt		= require( 'datatables.net' )( window, $ )
+const log		= require( 'electron-log' )
+const dt			= require( 'datatables.net' )( window, $ )
 const keytable	= require( 'datatables.net-keytable' )( window, $ )
 
 require( 'datatables.net-responsive' )( window, $ )
+require( 'datatables.net-select' )( window, $ )
+
+
+
+//note(dgmid): natural (locale-aware) string ordering for the Title column — plain
+//code-point compares sort "Álava" after "zoo" and treat "a" and "A" inconsistently.
+//Registered once as a DataTables type; the Title column declares type 'locale' below.
+
+if( !$.fn.dataTable.ext.type.order['locale-asc'] ) {
+	
+	const _collator = ( typeof Intl !== 'undefined' && Intl.Collator )
+		? new Intl.Collator( undefined, { numeric: true, sensitivity: 'base' } )
+		: null
+	
+	const _compare = ( a, b ) => {
+		
+		if( _collator ) return _collator.compare( a, b )
+		
+		a = String( a ).toLowerCase()
+		b = String( b ).toLowerCase()
+		
+		return ( a > b ) ? 1 : ( ( a < b ) ? -1 : 0 )
+	}
+	
+	$.fn.dataTable.ext.type.order['locale-asc']		= function( a, b ) { return _compare( a, b ) }
+	$.fn.dataTable.ext.type.order['locale-desc']	= function( a, b ) { return _compare( b, a ) }
+}
 
 
 
@@ -67,6 +95,11 @@ module.exports.bookmarkTable = $('#bookmarks').DataTable({
 	responsive: {
 		details: false
 	},
+	select: {
+		style: 'os',
+		selector: 'td:not(.details-control)',
+		info: true
+	},
 	keys: {
 		tabIndex: 1,
 		blurable: true,
@@ -75,6 +108,7 @@ module.exports.bookmarkTable = $('#bookmarks').DataTable({
 					40  // down
 		]
 	},
+	
 	scrollY: 	'calc(100vh - 59px)', // window height - header - footer
 	paging: 	false,
 	dom: 'ltipr', // hide default search field
@@ -83,6 +117,12 @@ module.exports.bookmarkTable = $('#bookmarks').DataTable({
 			return 'row_' + column[0] // create unique row id form json ids
 		},
 	'order': [[ 5, 'desc' ]],
+	//note(dgmid): make rows draggable so bookmarks can be dropped onto a folder card
+	//in the main panel's folder strip. Runs once per row at creation (not on every draw).
+	createdRow: function( row ) {
+		
+		row.setAttribute( 'draggable', 'true' )
+	},
 	columnDefs:
 		[
 			{
@@ -106,6 +146,7 @@ module.exports.bookmarkTable = $('#bookmarks').DataTable({
 				render: $.fn.dataTable.render.ellipsis( 45, true, true ),
 				responsivePriority: 1,
 				targets: [ 2 ],
+				type: 'locale',
 				width: '99%'
 			},
 			{
@@ -184,6 +225,204 @@ module.exports.bookmarkTable = $('#bookmarks').DataTable({
 	}
 })
 
+
+
+//note(dgmid): Hook into DataTables 'select'/'deselect' events to keep
+//              the internal _select.selected[] array in sync. This ensures
+//              that aoRowCreatedCallback re-applies the 'selected' class
+//              if any redraw occurs (e.g. scrollY virtualization, KeyTable
+//              focus change). Without this sync, programmatic .select() calls
+//              would set aoData[idx]._select_selected but NOT the redraw-safe
+//              flag _select.selected[idx].
+
+let _bookmarkTable = $('#bookmarks').DataTable()
+
+_bookmarkTable.on('select', function(e, dt, type, indexes) {
+	
+	if( type === 'row' ) {
+		
+		indexes.forEach(function(idx) {
+			
+			// Sync _select.selected so aoRowCreatedCallback re-applies class on redraw
+			try {
+				let settings = dt.settings()[0]
+				if( settings && settings._select ) {
+					settings._select.selected[ idx ] = true
+				}
+			} catch(e2) {}
+			
+			let node = dt.row(idx).node()
+			
+			if( node ) {
+				
+				$(node).addClass('selected')
+				
+				// INLINE STYLE FALLBACK: Paint <td> backgrounds directly.
+				// The bundled CSS for tr.selected td requires .stripe class on
+				// the table, which may not be present in scrollY mode. Inline
+				// styles on <td> are the highest-specificity approach and don't
+				// depend on CSS cascade or variable resolution.
+				$(node).children('td').css({
+					'background-color': '#005d6e',
+					'color': '#fff'
+				})
+				
+
+			}
+		})
+	}
+})
+
+_bookmarkTable.on('deselect', function(e, dt, type, indexes) {
+	
+	if( type === 'row' ) {
+		
+		indexes.forEach(function(idx) {
+			
+			// Sync _select.selected for redraw safety
+			try {
+				let settings = dt.settings()[0]
+				if( settings && settings._select && settings._select.selected ) {
+					delete settings._select.selected[ idx ]
+				}
+			} catch(e2) {}
+			
+			let node = dt.row(idx).node()
+			
+			if( node ) {
+				
+				$(node).removeClass('selected')
+				
+				// Remove inline style fallback
+				$(node).children('td').css({
+					'background-color': '',
+					'color': ''
+				})
+			}
+		})
+	}
+})
+
+
+//note(dgmid): Track anchor, current row, and KeyTable's focus position.
+//              _shiftAnchor = visual position (anchor for Shift+Arrow, 0-based)
+//              _currentRow  = visual position (where we are after each arrow)
+//              _focusedRow  = data index (tracks where KeyTable moved focus)
+//
+// CRITICAL: DataTables has TWO index systems when the table is sorted:
+//   - DATA index  = position in the original data array
+//   - VISUAL index = position on screen (0 = first visible row)
+// table.cell(node).index().row returns the DATA index. But arrow-key
+// navigation must use VISUAL positions (+1/-1) and then convert to
+// DATA indexes for .select() calls.
+
+let _shiftAnchor = null,
+	_currentRow  = null,
+	_focusedRow  = null
+
+$('#bookmarks tbody').on('mousedown', 'td:not(.details-control)', function(e) {
+	
+	// Only set anchor on plain click (no modifier keys)
+	if( !e.shiftKey && !e.ctrlKey && !e.metaKey ) {
+		
+		let table	= $('#bookmarks').DataTable(),
+			cell	= table.cell( this )
+		
+		if( cell ) {
+			
+			let dataIdx	= cell.index().row
+			
+			// Convert data index to visual position (0-based position on screen)
+			let visualIdx	= table.rows({ order: 'current' }).indexes().indexOf( dataIdx )
+			
+			_shiftAnchor = visualIdx
+			_currentRow  = visualIdx
+			_focusedRow  = dataIdx
+		}
+	}
+})
+
+
+//note(dgmid): Track KeyTable's focus movement via its key-focus.dt event.
+//              This fires DURING KeyTable's keydown processing, BEFORE the
+//              event bubbles to our document-level keydown handler.
+
+$('#bookmarks').on('key-focus.dt', function(e, datatable, cell) {
+	
+	if( cell && cell.index ) {
+		
+		_focusedRow = cell.index().row
+	}
+})
+
+
+//note(dgmid): Keyboard range selection — Shift+Arrow (up/down).
+//              Uses VISUAL positions for +1/-1 navigation, then converts
+//              to DATA indexes for .select() calls. This ensures that
+//              navigation follows the on-screen order even when the
+//              table is sorted by date.
+
+$(document).on('keydown', function(e) {
+	
+	// Only handle Up/Down arrows
+	if( e.which !== 38 && e.which !== 40 ) return
+	
+	// Must have a starting row
+	if( _currentRow === null || _focusedRow === null ) return
+	
+	let table		= $('#bookmarks').DataTable(),
+	    direction	= e.which === 40 ? 1 : -1,
+	    nextVisPos	= _currentRow + direction
+	
+	// Get all data indexes in CURRENT visual order (sorted by date desc)
+	let visualIdxArray	= table.rows({ order: 'current' }).indexes().toArray(),
+	    totalRows		= visualIdxArray.length
+	
+	if( nextVisPos < 0 || nextVisPos >= totalRows ) return
+	
+	e.preventDefault()
+	
+	// Convert visual position to data index for .select()
+	let nextDataIdx = visualIdxArray[ nextVisPos ]
+	
+	if( e.shiftKey ) {
+		
+		// Shift+Arrow: extend selection from anchor (visual) to nextVisPos
+		if( _shiftAnchor === null ) {
+			_shiftAnchor = _currentRow
+		}
+		
+		let startVis	= Math.min( _shiftAnchor, nextVisPos ),
+		    endVis		= Math.max( _shiftAnchor, nextVisPos ),
+		    dataIdxs	= []
+		
+		for( let v = startVis; v <= endVis; v++ ) {
+			dataIdxs.push( visualIdxArray[ v ] )
+		}
+		
+		table.rows().deselect()
+		table.rows( dataIdxs ).select()
+		
+	} else {
+		
+		// Arrow alone (no Shift): select only the row at nextVisPos
+		table.rows().deselect()
+		table.row( nextDataIdx ).select()
+		
+		_shiftAnchor = nextVisPos
+	}
+	
+	_currentRow = nextVisPos
+	_focusedRow = nextDataIdx
+	
+	// Move KeyTable's focus to the newly selected row (visible column 2 = title)
+	// so the focus indicator follows our predictable contiguous selection
+	// instead of KeyTable's erratic internal focus movement.
+	// Use the DATA index for .cell() since KeyTable works with data indexes.
+	try {
+		table.cell( nextDataIdx, 2 ).focus()
+	} catch( _e ) {}
+})
 
 
 module.exports.detailsTable = function( data ) {

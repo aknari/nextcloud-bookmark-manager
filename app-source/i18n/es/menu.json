@@ -1,0 +1,48 @@
+{
+  "app": {
+    "name": "Acerca de {{name}}",
+    "login": "Iniciar/cerrar sesión en Nextcloud…",
+    "quit": "Salir de {{name}}"
+  },
+  "bookmarks": {
+    "bookmarks": "Marcadores",
+    "new": "Añadir nuevo marcador…",
+    "edit": "Editar marcador…",
+    "delete": "Eliminar marcador…",
+    "newfolder": "Nueva carpeta…",
+    "sync": "Sincronizar marcadores",
+    "favicons": "Regenerar favicons",
+    "import": "Importar archivo de marcadores…",
+    "duplicates": "Buscar marcadores duplicados…",
+    "broken": "Detectar enlaces rotos…",
+    "export": "Exportar archivo de marcadores…",
+    "selectall": "Seleccionar todo",
+    "deselectall": "Deseleccionar todo",
+    "deleteselected": "Eliminar marcadores seleccionados…",
+    "autotag": "Auto-Etiquetar Marcadores…",
+    "ai": "Configuración de IA…",
+    "autoorg": "Auto-Organizar Marcadores…",
+    "learn": "Aprender estructura de carpetas…",
+    "repairtitles": "Reparar Títulos…",
+    "exportaz": "Exportar archivo de marcadores (A–Z)…"
+  },
+  "edit": {
+    "edit": "Editar",
+    "find": "Buscar…"
+  },
+  "view": {
+    "view": "Ver",
+    "sortalpha": "Ordenar marcadores A–Z"
+  },
+  "window": {
+    "window": "Ventana",
+    "close": "Cerrar",
+    "minimize": "Minimizar",
+    "zoom": "Zoom",
+    "front": "Traer todo al frente"
+  },
+  "help": {
+    "help": "Ayuda",
+    "homepage": "Página principal de Nextcloud Bookmark Manager"
+  }
+}

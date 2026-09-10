@@ -1,0 +1,12 @@
+{
+  "savedialog": {
+    "button": "Exportar Marcadores"
+  },
+  "errorbox": {
+    "title": "Error de Exportación",
+    "content": "Se produjo un error al exportar:\n{{- filepath}}"
+  },
+  "notification": {
+    "body": "el archivo: {{name}}\nse ha guardado en: {{- path}}"
+  }
+}

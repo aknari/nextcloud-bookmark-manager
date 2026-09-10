@@ -1,0 +1,13 @@
+{
+  "opendialog": {
+    "button": "Importa segnalibri"
+  },
+  "errorbox": {
+    "title": "Errore di importazione",
+    "nobookmarks": "Nessun segnalibro trovato nel file selezionato.",
+    "readfile": "Si è verificato un errore durante la lettura del file:\n{{- filepath}}"
+  },
+  "notification": {
+    "body": "{{count}} segnalibri importati da:\n{{- name}}"
+  }
+}

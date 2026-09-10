@@ -34,6 +34,15 @@ header {
 	overflow-y: scroll;
 }
 
+.hint {
+	
+	font-size: 11px;
+	line-height: 1.3;
+	color: var(--text);
+	opacity: .55;
+	margin-top: 3px;
+}
+
 form {
 	
 	padding: 20px 40px 0;
@@ -171,6 +180,19 @@ footer {
 			border-bottom-color: #0240DD;
 			background-image: linear-gradient(-180deg, #4A97FD 0%, #0968E5 100%);
 		}
+	}
+}
+
+//note(dgmid): login modal — keep the four footer buttons on a single line
+//(flex with even gaps; the buttons never wrap onto a second row)
+#modal-form {
+	
+	footer {
+		
+		display: flex;
+		justify-content: flex-end;
+		gap: 6px;
+		white-space: nowrap;
 	}
 }
 

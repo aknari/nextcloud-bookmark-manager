@@ -1,0 +1,19 @@
+{
+	"header": "Duplicate Bookmarks",
+	"button": {
+		"close": "Close",
+		"merge": "Merge {{count}}",
+		"merging": "Merging…"
+	},
+	"label": {
+		"folders": "Folders",
+		"tags": "Tags"
+	},
+	"error": {
+		"nodata": "No bookmark data available."
+	},
+	"summary": {
+		"none": "No duplicate bookmarks found.",
+		"found": "{{count}} duplicate groups found."
+	}
+}

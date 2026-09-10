@@ -1,0 +1,44 @@
+{
+  "header": "Configurazione IA",
+  "label": {
+    "apikey": "Chiave API Gemini",
+    "model": "Modello IA",
+    "maxtags": "Max etichette per segnalibro",
+    "maxsession": "Max elementi per sessione IA",
+    "apigap": "Intervallo tra chiamate IA (ms)",
+    "profiles": "Profili appresi (struttura cartelle)",
+    "profile_source": "Appreso da: {{folder}}",
+    "defaultprofile": "Predefinito (integrato)",
+    "builtin": "Integrato",
+    "default_source": "Incluso con l'app — non può essere eliminato"
+  },
+  "hint": {
+    "apikey": "Ottieni la chiave gratuita su ai.google.dev",
+    "model": "I modelli Flash sono più veloci e idonei al piano gratuito",
+    "maxsession": "Limita l'uso dell'API IA per esecuzione (auto-tag, auto-organizza)",
+    "apigap": "Il piano gratuito consente ~20 richieste/minuto — mantieni 3500 ms o più per esecuzioni grandi. Imposta 0 con un piano a pagamento."
+  },
+  "button": {
+    "test": "Test connessione",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "deleteprofile": "Elimina",
+    "resetprofiles": "Reimposta apprendimento"
+  },
+  "status": {
+    "noapikey": "Inserisci prima una chiave API.",
+    "testing": "Test connessione e recupero modelli…",
+    "error": "Connessione fallita: {{error}}",
+    "success_basic": "Connesso! Chiave API valida. Caricati {{total}} modelli.",
+    "success_populated": "Connesso! Caricati {{total}} modelli ({{flash}} flash).",
+    "nomodels": "Nessun modello disponibile",
+    "noprofiles": "Nessun profilo appreso. Usa Segnalibri > Impara la struttura delle cartelle… per crearne uno."
+  },
+  "dialog": {
+    "deleteprofile": "Eliminare il profilo \"{{name}}\"?",
+    "deleteprofile_detail": "Questo profilo non sarà più offerto in Auto-Organizza.",
+    "resetprofiles": "Reimpostare tutti i profili appresi?",
+    "resetprofiles_detail": "Cancella tutti i profili appresi. Auto-Organizza tornerà al comportamento predefinito (generico).",
+    "cancel": "Annulla"
+  }
+}

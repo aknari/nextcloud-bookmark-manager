@@ -1,0 +1,28 @@
+{
+  "errorbox": {
+    "title": {
+      "error": "Error del servidor",
+      "json": "Error al analizar el JSON"
+    },
+    "content": {
+      "error": "hubo un error al recuperar:\n{{- server}}{{- url}}\n\n{{error}}",
+      "json": "Se produjo un error al analizar los marcadores"
+    }
+  },
+  "dialog": {
+    "error": {
+      "message": {
+        "400": "Solicitud incorrecta",
+        "401": "No autorizado",
+        "403": "Prohibido",
+        "404": "No encontrado",
+        "500": "Error interno del servidor",
+        "501": "No implementado",
+        "502": "Puerta de enlace incorrecta",
+        "503": "Servicio no disponible",
+        "504": "Tiempo de espera de la puerta de enlace",
+        "default": "Sin especificar"
+      }
+    }
+  }
+}

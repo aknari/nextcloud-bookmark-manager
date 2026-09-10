@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="">
+	<head>
+		<meta charset="utf-8" />
+		<title>Nextcloud Bookmark Manager - Check Broken Links</title>
+		<script>
+			require( '../js/theme.min' )
+		</script>
+		<link rel="stylesheet" type="text/css" href="../css/modal.min.css" media="all">
+		<style>
+			body { background-color: #ececec; }
+			[data-theme^="dark"] body { background-color: #323232; }
+			#status { text-align: center; padding: 20px 16px; font-size: 13px; color: var(--text); }
+			#progress-bar { width: 0%; height: 4px; background: var(--accent); transition: width .3s; border-radius: 2px; margin: 10px auto; max-width: 300px; }
+			#results { padding: 8px 16px 50px; display: none; }
+			.broken-item { font-size: 12px; padding: 6px; margin: 4px 0; border-left: 3px solid #e74c3c; background: var(--input-background); border-radius: 2px; }
+			.broken-item .title { font-weight: bold; color: var(--text); }
+			.broken-item .meta { font-size: 11px; color: var(--text-light); margin-top: 2px; word-break: break-all; }
+			.summary { text-align: center; font-size: 13px; padding: 20px; color: var(--text-light); }
+			.current-url { font-size: 11px; color: var(--text-light); word-break: break-all; margin-top: 6px; padding: 0 16px; text-align: center; }
+			
+			/* scope panel — mirrors the auto-tag modal look */
+			#scope-panel { padding: 12px 24px 0; border-bottom: 1px solid var(--table-border); margin-bottom: 4px; }
+			#scope-panel .section-title { font-size: 11px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: .3px; margin-bottom: 2px; }
+			#scope-panel .section-value { font-size: 13px; color: var(--text); margin-bottom: 6px; }
+			#scope-panel label {
+				display: flex !important; align-items: center; gap: 6px; cursor: pointer;
+				font-size: 12px; color: var(--text); margin-bottom: 8px;
+			}
+			#scope-panel label input { margin: 0; flex: none; }
+			#scope-panel .scope-hint { font-size: 11px; color: var(--text-light); margin-bottom: 8px; }
+			
+			/* interrupt summary panel */
+			#interrupt-panel {
+				display: none; margin: 12px 16px; padding: 12px 14px; border-radius: 6px;
+				background: #fff3cd; border: 1px solid #ffe08a; color: #7a5c00;
+				font-size: 12px; line-height: 1.5;
+			}
+			#interrupt-panel .interrupt-title { font-weight: 700; margin-bottom: 4px; }
+			#interrupt-panel .interrupt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+			#interrupt-panel button { padding: 6px 12px; border-radius: 4px; border: 1px solid var(--tab-dividers); background: var(--input-background); color: var(--text); font-size: 12px; cursor: pointer; }
+			#interrupt-panel button:hover { opacity: .85; }
+			#interrupt-panel button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+			
+			/* degraded (read-only) notice — shown when the server rejects the session */
+			#degraded-note { margin: 10px 16px 0; padding: 8px 12px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffe08a; color: #7a5c00; font-size: 12px; line-height: 1.5; }
+			
+			footer { position: fixed; bottom: 0; left: 0; right: 0; background: var(--menu); padding: 8px 16px; text-align: right; border-top: 1px solid var(--table-border); }
+			#btn-start { float: left; }
+		</style>
+	</head>
+	
+	<body>
+		<header data-i18n="checkbroken:header">Check Broken Links</header>
+		
+		<div id="degraded-note" style="display:none;" data-i18n="checkbroken:degraded.note"></div>
+		
+		<div class="scroll">
+			
+			<!-- scope summary: which bookmarks will be checked -->
+			<div id="scope-panel">
+				<div id="selection-scope" style="display:none;">
+					<div class="section-title" data-i18n="checkbroken:label.selectedbm">Selected Bookmarks</div>
+					<div class="section-value" id="cfg-selectedbm">—</div>
+				</div>
+				<div class="folder-scope" style="display:none;">
+					<div class="section-title" data-i18n="checkbroken:label.folder">Folder to Check</div>
+					<div class="section-value" id="cfg-folder">—</div>
+				</div>
+				<div class="folder-scope" style="display:none;">
+					<div class="section-title" data-i18n="checkbroken:label.bookmarks">Bookmarks in Scope</div>
+					<div class="section-value" id="cfg-count">—</div>
+				</div>
+				<div class="folder-scope" style="display:none;">
+					<label for="chk-include-subfolders">
+						<input type="checkbox" id="chk-include-subfolders">
+						<span data-i18n="checkbroken:label.includesub">Include bookmarks in subfolders</span>
+					</label>
+				</div>
+				<div id="all-scope" style="display:none;">
+					<div class="section-title" data-i18n="checkbroken:label.all">Scope</div>
+					<div class="section-value" data-i18n="checkbroken:label.all_value">All bookmarks</div>
+				</div>
+			</div>
+			
+			<div id="status"></div>
+			<div id="progress-bar"></div>
+			<div id="results"></div>
+			
+			<!-- shown when the user closes mid-run: honest summary with options -->
+			<div id="interrupt-panel">
+				<div class="interrupt-title" data-i18n="checkbroken:interrupt.title">Check interrupted</div>
+				<div id="interrupt-text"></div>
+				<div class="interrupt-actions">
+					<button id="btn-resume" class="primary" data-i18n="checkbroken:button.resume">Continue Checking</button>
+					<button id="btn-tag-now" data-i18n="checkbroken:button.tagnow">Tag broken now</button>
+					<button id="btn-close-no-save" data-i18n="checkbroken:button.close_nosave">Close without saving</button>
+				</div>
+			</div>
+		</div>
+		
+		<footer id="footer">
+			<button id="btn-start" class="ui-button" type="button" data-i18n="checkbroken:button.start">Start Check</button>
+			<button id="btn-close" class="ui-button" type="button" data-i18n="checkbroken:button.close">Close</button>
+		</footer>
+		
+		<script>
+			require( '../js/modal-check-broken-links.min' )
+		</script>
+	</body>
+</html>

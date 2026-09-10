@@ -2,7 +2,13 @@
 
 const i18n 			= require( './i18n.min' )
 
-const remote 		= require( 'electron' ).remote
+// Polyfill: make electron-store work in renderer
+try {
+	const electron = require( 'electron' )
+	const remote = require( '@electron/remote' )
+	if( !electron.app ) electron.app = remote.app
+} catch( e ) {}
+
 const ipc 			= require( 'electron' ).ipcRenderer
 
 const Store 		= require( 'electron-store' )
@@ -16,15 +22,11 @@ jqueryI18next.init(i18n, $)
 const log			= require( 'electron-log' )
 const fetch			= require( './fetch.min' )
 const serialize		= require( './serialize.min' )
+const folderList	= require( './folder-list.min' )
 
-let folders 		= store.get( 'folders' ).reverse(),
+let folders 		= store.get( 'folders' ) || [],
 	urlParams 		= new URLSearchParams( location.search ),
 	currentFolder 	= urlParams.get('folder')
-
-folders.unshift({
-	"id": -1,
-	"text": i18n.t( 'addfolder:select.option.home', 'Home' )
-})
 
 
 
@@ -58,21 +60,39 @@ Mousetrap.bind('command+.', function() {
 
 function closeModal() {
 	
-	const modal = remote.getCurrentWindow()
-	modal.close()
+	ipc.send( 'close-current-window' )
 }
 
 
 
 $(document).ready(function() {
 	
-	for( let folder of folders ) {
+	//note(dgmid): Home first, then the rest indented as a tree
+	
+	let options = [ {
+		"id": -1,
+		"text": i18n.t( 'addfolder:select.option.home', 'Home' ),
+		"depth": 0
+	} ]
+	
+	for( let node of folderList.buildHierarchyList( folders ) ) {
+		
+		options.push( {
+			"id": node.id,
+			"text": node.text,
+			"depth": node.depth
+		} )
+	}
+	
+	for( let option of options ) {
 		
 		let selected = ''
 		
-		if( folder.id == currentFolder ) selected = ' selected';
+		if( option.id == currentFolder ) selected = ' selected';
 		
-		$('#parent_folder').append( `<option value="${folder.id}"${selected}>${folder.text}</option>` )
+		let indent = '\u00A0\u00A0'.repeat( option.depth )
+		
+		$('#parent_folder').append( `<option value="${option.id}"${selected}>${indent}${option.text}</option>` )
 	}
 	
 	

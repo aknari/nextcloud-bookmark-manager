@@ -7,3 +7,13 @@
 
 @import '../../node_modules/select2/dist/css/select2.min.css';
 @import 'partials/_select2-custom';
+
+// Modal background: since transparent windows are unreliable in modern Electron
+// we set a solid background here. The CSS custom properties handle theme switching.
+body {
+	background-color: #ececec;
+}
+
+[data-theme^="dark"] body {
+	background-color: #323232;
+}

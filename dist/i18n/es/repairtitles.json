@@ -1,0 +1,57 @@
+{
+  "header": "Reparar Títulos",
+  "label": {
+    "scope": "Ámbito",
+    "what": "Repara los títulos y descripciones que se corrompieron por una codificación incorrecta (mojibake): primero localmente con una recodificación determinista y, si hace falta, capturando el título real desde la página.",
+    "fill_desc": "Rellenar descripciones vacías desde la página"
+  },
+  "hint": {
+    "fill_desc": "Para marcadores sin descripción, captura la meta descripción de la página. Muchas peticiones web — puede tardar."
+  },
+  "scope": {
+    "selected": "Solo los marcadores seleccionados",
+    "all": "Todos los marcadores"
+  },
+  "field": {
+    "title": "Título",
+    "description": "Descripción"
+  },
+  "progress": {
+    "fetch": "Capturando títulos y descripciones de la web… {{current}} de {{total}}",
+    "apply": "Aplicando {{current}} de {{total}}"
+  },
+  "summary": {
+    "recovered": "Se recuperaron {{recovered}} de {{total}} marcadores ({{local}} local, {{web}} web, {{both}} ambos).",
+    "unrecoverable": "{{count}} no se pudieron recuperar.",
+    "skipped": "{{count}} no se pudieron completar (la página no proporcionó la información que faltaba).",
+    "none": "No se encontraron títulos o descripciones corruptos en el ámbito seleccionado.",
+    "approx": "{{count}} reparados de forma aproximada (decodificación parcial — revísalos antes de aplicar)."
+  },
+  "badge": {
+    "local": "local",
+    "web": "web",
+    "both": "local + web",
+    "approx": "aprox."
+  },
+  "unrecoverable": "no se pudo recuperar",
+  "button": {
+    "start": "Escanear",
+    "apply": "Aplicar al Servidor",
+    "applying": "Aplicando…",
+    "close": "Cerrar"
+  },
+  "error": {
+    "noapply_title": "No hay cambios que aplicar",
+    "noapply_content": "No hay cambios recuperados aceptados. Marca elementos o vuelve a escanear."
+  },
+  "done": {
+    "applied": "Se actualizaron {{applied}} marcadores.",
+    "failed": "{{failed}} fallaron.",
+    "title": "Reparación de Títulos Completada"
+  },
+  "status": {
+    "scanned": "Escaneo completado — {{total}} revisados, {{recovered}} recuperados. Puedes volver a escanear.",
+    "none": "Escaneo completado — no se encontraron títulos o descripciones corruptos en el ámbito seleccionado.",
+    "applied": "Cambios aplicados al servidor ({{count}} marcadores)."
+  }
+}

@@ -1,4 +1,12 @@
 {
+  "degraded": {
+    "banner": "Server offline or session rejected — read-only mode. Your bookmarks are safe in the local copy.",
+    "retry": "Retry connection",
+    "export": "Export copy…",
+    "noexport": "There is no local copy to export yet. Connect to the server once to create one.",
+    "title": "Offline mode",
+    "writeblocked": "The server is unreachable or has rejected the session, so changes are not being applied. Your bookmarks are safe in the local copy."
+  },
   "errorbox": {
     "title": {
       "deletebookmark": "Delete Bookmark Error",
@@ -6,19 +14,22 @@
     },
     "content": {
       "deletebookmark": "A bookmark must be selected in order to delete it",
-      "editbookmark": "A bookmark must be selected in order to edit it"
+      "editbookmark": "A bookmark must be selected in order to edit it",
+      "deleteselected": "No bookmarks are selected. Use Ctrl+Click or Shift+Click to select multiple bookmarks, then try again."
     }
   },
   "dialog": {
     "message": {
       "deletetag": "Are you sure you want to delete the tag {{- tag}}?",
       "deletebookmark": "Are you sure you want to delete the bookmark {{- bookmark}}?",
+      "deleteselected": "Are you sure you want to delete {{count}} selected bookmarks?",
       "deletefolder": "Are you sure you want to delete the folder {{- folder}}?",
       "deletefromfolder": "Are you sure you want to remove the current bookmark from this folder?"
     },
     "detail": {
       "deletetag": "This operation is not reversable.",
       "deletebookmark": "This operation is not reversable.",
+      "deleteselected": "This operation is not reversable.",
       "deletefolder": "Deleting this folder will also delete any bookmarks it contains",
       "deletefromfolder": "Removing the current bookmark from this folder will also delete the bookmark."
     },
@@ -26,6 +37,7 @@
       "cancel": "Cancel",
       "deletetag": "Delete Tag",
       "deletebookmark": "Delete Bookmark",
+      "deleteselected": "Delete {{count}} Bookmarks",
       "deletefolder": "Delete Folder",
       "deletefromfolder": "Delete Bookmark"
     }
@@ -34,6 +46,7 @@
     "filter": {
       "all": "All Bookmarks",
       "untagged": "un-tagged",
+      "favicon": "Favicon",
       "description": "Description",
       "url": "URL",
       "created": "Created",
@@ -48,10 +61,28 @@
     },
     "search": "Search"
   },
+  "tagtoolbar": {
+    "and": "AND",
+    "or": "OR",
+    "clear": "Clear tags"
+  },
   "button": {
     "home": "Home",
     "newfolder": "New Folder…",
     "new": "Add New Bookmark"
+  },
+  "folderstrip": {
+    "label": "Subfolders",
+    "homehint": "Move to Home (root)"
+  },
+  "sync": {
+    "syncing": "Syncing…"
+  },
+  "view": {
+    "toggle": "Toggle view",
+    "list": "List",
+    "cards": "Cards",
+    "empty": "No bookmarks match the current filters."
   },
   "export": {
     "notification": {

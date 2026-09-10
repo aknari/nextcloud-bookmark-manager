@@ -12,7 +12,18 @@
     "newfolder": "Nuova cartella…",
     "sync": "Sincronizza segnalibri",
     "favicons": "Rigenera le favicon",
-    "export": "Esporta file segnalibri…"
+    "import": "Importa file segnalibri…",
+    "duplicates": "Trova segnalibri duplicati…",
+    "broken": "Controlla collegamenti rotti…",
+    "export": "Esporta file segnalibri…",
+    "selectall": "Seleziona tutto",
+    "deselectall": "Deseleziona tutto",
+    "deleteselected": "Elimina segnalibri selezionati…",
+    "autotag": "Auto-Etichetta Segnalibri…",
+    "autoorg": "Auto-Organizza Segnalibri…",
+    "learn": "Impara la struttura delle cartelle…",
+    "ai": "Impostazioni IA…",
+    "repairtitles": "Ripara Titoli…"
   },
   "edit": {
     "edit": "Modifica",

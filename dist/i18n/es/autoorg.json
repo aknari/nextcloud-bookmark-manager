@@ -1,0 +1,100 @@
+{
+  "header": "Auto-Organizar Marcadores",
+  "label": {
+    "folder": "Carpeta a organizar",
+    "bookmarks": "Marcadores en la carpeta",
+    "model": "Modelo IA",
+    "maxfolder": "Máx. elementos por carpeta (marcadores + subcarpetas)",
+    "minfolder": "Mín. marcadores por carpeta nueva",
+    "destroot": "la carpeta de destino",
+    "includesub": "Incluir marcadores de las subcarpetas",
+    "capnotice": "Esta ejecución procesará solo <strong>{{cap}}</strong> de <strong>{{total}}</strong> marcadores (límite de sesión de IA).",
+    "overridecap": "Procesar todos en esta ejecución (temporal)",
+    "home": "Inicio",
+    "nobookmarks": "No se encontraron marcadores en esta carpeta — selecciona primero una carpeta",
+    "profile": "Perfil de organización",
+    "noprofile": "Ninguno (la IA decide libremente)",
+    "defaultprofile": "Predeterminado (integrado)",
+    "dest": "Carpeta de destino",
+    "same": "Igual que el origen (carpeta actual)",
+    "reusedest": "Usar la estructura existente del destino como guía",
+    "deleteempty": "Eliminar las carpetas vacías que queden tras organizar",
+    "consider_existing": "Considerar las carpetas existentes (reutilizar lo que ya hay)",
+    "others": "Otros"
+  },
+  "hint": {
+    "profile": "Opcional: aplicar una filosofía organizativa aprendida",
+    "reusedest": "Solo se aplica cuando el destino es distinto de la carpeta de origen",
+    "consider_existing": "Si se desactiva, se descarta la estructura de carpetas anterior y la IA reorganiza desde cero usando solo el perfil seleccionado",
+    "maxfolder": "Límite blando: las carpetas que superen aproximadamente este número de elementos (marcadores + subcarpetas) se dividen en subcarpetas equilibradas; los grupos cercanos al límite se mantienen y las carpetas de un solo elemento se fusionan.",
+    "minfolder": "Las carpetas nuevas creadas por esta ejecución con menos marcadores que este número se fusionan con la carpeta hermana más cercana (o suben un nivel). Evita carpetas con un único marcador. Las carpetas existentes se respetan."
+  },
+  "button": {
+    "start": "Iniciar",
+    "cleanempty": "Borrar carpetas vacías…",
+    "acceptall": "Aceptar todo",
+    "apply": "Aplicar al servidor",
+    "applying": "Aplicando…",
+    "close": "Cerrar",
+    "cancel": "Cancelar"
+  },
+  "error": {
+    "noconfig": "No se encontró configuración de IA. Ve a Marcadores > Configuración de IA para configurar tu clave de API primero.",
+    "nocontext_title": "Sin carpeta seleccionada",
+    "nocontext_content": "Abre esta ventana desde una carpeta de la ventana principal primero.",
+    "nomoves_title": "No hay movimientos que aplicar",
+    "nomoves_content": "Ningún marcador tiene movimientos aceptados. Activa movimientos o usa Aceptar todo primero."
+  },
+  "progress": {
+    "classifying": "Clasificando {{current}} de {{total}} marcadores…",
+    "creating": "Creando carpeta {{current}} de {{total}}: {{name}}",
+    "moving": "Moviendo marcador {{current}} de {{total}}",
+    "deleting": "Eliminando carpeta vacía {{current}} de {{total}}",
+    "scanning": "Buscando carpetas vacías…",
+    "rebalancing": "Reequilibrando carpetas…",
+    "quota": "Cuota de API alcanzada — reintentando en {{wait}}s…",
+    "quota_minute_title": "Cuota de API alcanzada — reintentando automáticamente",
+    "quota_minute": "Se ha alcanzado el límite por minuto de la API. Reintentando en <strong>{{wait}}s</strong> (intento {{attempt}} de {{max}}). Puedes dejar esta ventana abierta — continuará por sí solo.",
+    "quota_daily_title": "Cuota diaria de API alcanzada",
+    "quota_daily": "Se ha agotado la cuota diaria gratuita. Se restablece a medianoche, hora del Pacífico (dentro de unas <strong>{{hours}}h {{minutes}}m</strong>). Puedes cerrar esta ventana con tranquilidad — no se ha cambiado nada y no se ha perdido ningún marcador.",
+    "quota_stopped_title": "Ejecución detenida — cuota de API agotada",
+    "quota_stopped": "La ejecución se detuvo porque la cuota de la API sigue agotada tras el reintento. Casi con seguridad es el límite diario — se restablece a medianoche, hora del Pacífico (dentro de unas <strong>{{hours}}h {{minutes}}m</strong>). Puedes cerrar esta ventana con tranquilidad — no se ha cambiado nada y no se ha perdido ningún marcador."
+  },
+  "summary": {
+    "proposed": "Se propone mover <strong>{{moved}}</strong> de {{total}} marcadores a <strong>{{new}}</strong> carpetas nuevas y <strong>{{existing}}</strong> existentes.",
+    "quota_box": "⚠ <strong>La ejecución se detuvo por la cuota de la API.</strong> Solo se clasificaron <strong>{{moved}}</strong> de {{total}} marcadores — los <strong>{{left}}</strong> restantes NO se procesaron y permanecen intactos en el servidor. La cuota se restablece a medianoche, hora del Pacífico (dentro de unas <strong>{{hours}}h {{minutes}}m</strong>). Puedes cerrar esta ventana — no se ha cambiado nada más.",
+    "quota_box_done": "⚠ <strong>La clasificación terminó ({{moved}} de {{total}} marcadores), pero el rebalanceo se detuvo por la cuota de la API.</strong> La propuesta de abajo está completa y todavía puedes aplicarla — sin embargo, las carpetas NO se reequilibraron al máximo configurado, así que algunas pueden tener más elementos del límite. No se ha cambiado nada en el servidor.",
+    "api_calls": "Esta ejecución realizó <strong>{{n}}</strong> llamadas a la API.",
+    "api_calls_stopped": "Esta ejecución realizó <strong>{{n}}</strong> llamadas a la API antes de que la cuota la detuviera.",
+    "mechanical": "ℹ El pase de equilibrio con IA se interrumpió, así que <strong>{{count}}</strong> carpeta(s) desbordada(s) se equilibraron sin IA (agrupadas por sitio/dominio)."
+  },
+  "results": {
+    "empty": "No se propusieron movimientos.",
+    "new": "NUEVA",
+    "unassigned": "Sin asignar"
+  },
+  "done": {
+    "title": "Auto-Organización completada",
+    "title_cancel": "Auto-Organización cancelada",
+    "applied": "Movimientos aplicados a {{count}} marcadores.",
+    "skipped": "{{skipped}} omitidos.",
+    "cancelled": "Operación cancelada.",
+    "emptied": "{{deleted}} carpetas vacías eliminadas.",
+    "noempty": "No se encontraron carpetas vacías en este ámbito.",
+    "title_clean": "Limpiar carpetas vacías"
+  },
+  "dialog": {
+    "emptyfolders": {
+      "message": "La reorganización dejó {{count}} carpetas vacías. ¿Eliminarlas?",
+      "message_standalone": "Se encontraron {{count}} carpetas vacías. ¿Eliminarlas?",
+      "note": "Nota: también se eliminarán las subcarpetas vacías anidadas dentro de estas.",
+      "confirm": "Eliminar carpetas vacías",
+      "cancel": "Cancelar"
+    }
+  },
+  "status": {
+    "scanned": "Proceso completado — revisa los movimientos propuestos a continuación.",
+    "applied": "Movimientos aplicados al servidor ({{count}} marcadores).",
+    "cancelled": "Operación cancelada — no se aplicaron cambios."
+  }
+}

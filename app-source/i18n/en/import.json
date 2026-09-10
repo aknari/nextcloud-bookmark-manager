@@ -1,0 +1,13 @@
+{
+  "opendialog": {
+    "button": "Import Bookmarks"
+  },
+  "errorbox": {
+    "title": "Import Error",
+    "nobookmarks": "No bookmarks found in the selected file.",
+    "readfile": "An error occured reading the file:\n{{- filepath}}"
+  },
+  "notification": {
+    "body": "{{count}} bookmarks imported from:\n{{- name}}"
+  }
+}

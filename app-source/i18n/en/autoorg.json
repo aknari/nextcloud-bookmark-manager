@@ -1,0 +1,100 @@
+{
+  "header": "Auto-Organize Bookmarks",
+  "label": {
+    "folder": "Folder to Organize",
+    "bookmarks": "Bookmarks in Folder",
+    "model": "AI Model",
+    "maxfolder": "Max items per folder (bookmarks + subfolders)",
+    "minfolder": "Min bookmarks per new folder",
+    "destroot": "the destination folder",
+    "includesub": "Include bookmarks in subfolders",
+    "capnotice": "This run will process only <strong>{{cap}}</strong> of <strong>{{total}}</strong> bookmarks (AI session cap).",
+    "overridecap": "Process all for this run (temporary)",
+    "home": "Home",
+    "nobookmarks": "No bookmarks found in this folder — select a folder first",
+    "profile": "Organization Profile",
+    "noprofile": "None (AI decides freely)",
+    "defaultprofile": "Default (built-in)",
+    "dest": "Destination Folder",
+    "same": "Same as source (current folder)",
+    "reusedest": "Use the destination's existing structure as a guide",
+    "deleteempty": "Delete empty folders left behind after organizing",
+    "consider_existing": "Consider existing folders (reuse what's already there)",
+    "others": "Otros"
+  },
+  "hint": {
+    "profile": "Optional: apply a learned organizational philosophy",
+    "reusedest": "Only applies when the destination is different from the source folder",
+    "consider_existing": "When off, the previous folder structure is discarded and the AI reorganizes from scratch using only the selected profile",
+    "maxfolder": "Soft limit: folders above ~this many items (bookmarks + subfolders) are split into balanced subfolders; groups near the limit stay together and single-item folders are merged.",
+    "minfolder": "New folders created by this run with fewer than this many bookmarks are merged into the closest sibling folder (or moved one level up). Prevents folders with a single bookmark. Existing folders are respected."
+  },
+  "button": {
+    "start": "Start",
+    "cleanempty": "Delete Empty Folders…",
+    "acceptall": "Accept All",
+    "apply": "Apply to Server",
+    "applying": "Applying…",
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "error": {
+    "noconfig": "No AI configuration found. Go to Bookmarks > AI Settings to set up your API key first.",
+    "nocontext_title": "No Folder Selected",
+    "nocontext_content": "Open this window from a folder in the main window first.",
+    "nomoves_title": "No Moves to Apply",
+    "nomoves_content": "No bookmarks have accepted moves. Toggle moves or use Accept All first."
+  },
+  "progress": {
+    "classifying": "Classifying {{current}} of {{total}} bookmarks…",
+    "creating": "Creating folder {{current}} of {{total}}: {{name}}",
+    "moving": "Moving bookmark {{current}} of {{total}}",
+    "deleting": "Deleting empty folder {{current}} of {{total}}",
+    "scanning": "Scanning for empty folders…",
+    "rebalancing": "Rebalancing folders…",
+    "quota": "API quota reached — retrying in {{wait}}s…",
+    "quota_minute_title": "API quota reached — retrying automatically",
+    "quota_minute": "The per-minute API limit was reached. Retrying in <strong>{{wait}}s</strong> (attempt {{attempt}} of {{max}}). You can leave this window open — it will continue on its own.",
+    "quota_daily_title": "Daily API quota reached",
+    "quota_daily": "The free daily quota has been exhausted. It resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window with peace of mind — nothing has been changed and no bookmarks have been lost.",
+    "quota_stopped_title": "Run stopped — API quota exhausted",
+    "quota_stopped": "The run was stopped because the API quota is still exhausted after a full retry wait. This is very likely the daily limit — it resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window with peace of mind — nothing has been changed and no bookmarks have been lost."
+  },
+  "summary": {
+    "proposed": "Proposed moving <strong>{{moved}}</strong> of {{total}} bookmarks into <strong>{{new}}</strong> new and <strong>{{existing}}</strong> existing folders.",
+    "quota_box": "⚠ <strong>The run was stopped by the API quota.</strong> Only <strong>{{moved}}</strong> of {{total}} bookmarks were classified — the remaining <strong>{{left}}</strong> were NOT processed and remain untouched on the server. The quota resets at midnight Pacific Time (in about <strong>{{hours}}h {{minutes}}m</strong>). You can close this window — nothing else has been changed.",
+    "quota_box_done": "⚠ <strong>Classification finished ({{moved}} of {{total}} bookmarks), but the rebalancing pass was stopped by the API quota.</strong> The proposal below is complete and you can still apply it — however, folders were NOT rebalanced to the configured maximum, so some may hold more items than the limit. Nothing has been changed on the server yet.",
+    "api_calls": "This run made <strong>{{n}}</strong> API calls.",
+    "api_calls_stopped": "This run made <strong>{{n}}</strong> API calls before the API quota stopped it.",
+    "mechanical": "ℹ The AI rebalancing pass was cut short, so <strong>{{count}}</strong> overfull folder(s) were balanced without AI (grouped by website/domain)."
+  },
+  "results": {
+    "empty": "No moves were proposed.",
+    "new": "NEW",
+    "unassigned": "Unassigned"
+  },
+  "done": {
+    "title": "Auto-Organize Complete",
+    "title_cancel": "Auto-Organize Cancelled",
+    "applied": "Applied moves to {{count}} bookmarks.",
+    "skipped": "{{skipped}} skipped.",
+    "cancelled": "Operation cancelled.",
+    "emptied": "{{deleted}} empty folders removed.",
+    "noempty": "No empty folders were found in this scope.",
+    "title_clean": "Clean Up Empty Folders"
+  },
+  "dialog": {
+    "emptyfolders": {
+      "message": "The reorganization left {{count}} empty folder(s). Delete them?",
+      "message_standalone": "Found {{count}} empty folder(s). Delete them?",
+      "note": "Note: any empty subfolders nested inside these will also be removed.",
+      "confirm": "Delete Empty Folders",
+      "cancel": "Cancel"
+    }
+  },
+  "status": {
+    "scanned": "Run complete — review the proposed moves below.",
+    "applied": "Moves applied to the server ({{count}} bookmarks).",
+    "cancelled": "Operation cancelled — no changes were applied."
+  }
+}

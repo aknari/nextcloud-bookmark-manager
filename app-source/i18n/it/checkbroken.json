@@ -1,0 +1,43 @@
+{
+	"header": "Controlla Collegamenti Rotti",
+	"degraded": {
+		"note": "Il server non è raggiungibile o ha rifiutato la sessione — i link rotti verranno rilevati ma NON salvati sul server."
+	},
+	"button": {
+		"close": "Chiudi",
+		"start": "Avvia controllo",
+		"cancel": "Annulla",
+		"resume": "Continua controllo",
+		"tagnow": "Etichetta {{count}} rotti ora",
+		"close_nosave": "Chiudi senza salvare"
+	},
+	"label": {
+		"selectedbm": "Segnalibri selezionati",
+		"selected_count": "{{selected}} segnalibri selezionati",
+		"folder": "Cartella da controllare",
+		"bookmarks": "Segnalibri nell'ambito",
+		"includesub": "Includi segnalibri nelle sottocartelle",
+		"all": "Ambito",
+		"all_value": "Tutti i segnalibri"
+	},
+	"error": {
+		"nodata": "Nessun dato disponibile.",
+		"noscope": "Nessun segnalibro da controllare nell'ambito corrente."
+	},
+	"status": {
+		"cleaning": "Rimuovo etichetta \"broken\" precedente…",
+		"fetching": "Recupero segnalibri…",
+		"starting": "Controllando {{total}} segnalibri…",
+		"checking": "Controllando {{current}} di {{total}}…",
+		"tagging": "Applicando etichette… ({{tagged}}/{{total}})"
+	},
+	"summary": {
+		"none": "Tutti i {{total}} segnalibri sono accessibili.",
+		"found": "{{count}} collegamento(i) rotto(i) trovati.",
+		"done": "Fatto! {{count}} segnalibro(i) etichettati come \"broken\"."
+	},
+	"interrupt": {
+		"title": "Controllo interrotto",
+		"text": "{{checked}} di {{total}} segnalibri controllati — {{broken}} rotti trovati (non ancora etichettati)."
+	}
+}
