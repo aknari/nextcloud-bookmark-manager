@@ -1,0 +1,11 @@
+{
+  "title": "Nextcloud Bookmark Manager",
+  "icon": "dist/assets/icon/icon.icns",
+  "icon-size": 96,
+  "background": "scripts/dmg/background.png",
+  "window": { "position": { "x": 380, "y": 220 }, "size": { "width": 660, "height": 400 } },
+  "contents": [
+    { "x": 180, "y": 240, "type": "file", "path": "build/Nextcloud Bookmark Manager-darwin-arm64/Nextcloud Bookmark Manager.app" },
+    { "x": 480, "y": 240, "type": "link", "path": "/Applications" }
+  ]
+}

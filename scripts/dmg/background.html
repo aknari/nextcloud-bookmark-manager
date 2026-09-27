@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+	html, body { margin: 0; padding: 0; width: 660px; height: 400px; overflow: hidden; }
+	body {
+		background: radial-gradient(ellipse at 50% 30%, #34363e 0%, #232429 55%, #1a1b20 100%);
+		font-family: -apple-system, "SF Pro Text", Helvetica, sans-serif;
+		color: #e8e9ec;
+		position: relative;
+	}
+	.title {
+		position: absolute; top: 26px; left: 0; right: 0;
+		text-align: center; font-size: 19px; font-weight: 600; letter-spacing: .02em;
+	}
+	.subtitle {
+		position: absolute; top: 52px; left: 0; right: 0;
+		text-align: center; font-size: 12px; font-weight: 400; color: #9aa0ab;
+	}
+	.hint {
+		position: absolute; bottom: 24px; left: 0; right: 0;
+		text-align: center; font-size: 13px; color: #c7cbd3;
+	}
+	.hint .accent { color: #3ea6ff; font-weight: 600; }
+	.arrows {
+		position: absolute; top: 172px; left: 0; right: 0;
+		text-align: center; font-size: 22px; letter-spacing: .35em; color: #3ea6ff; opacity: .9;
+	}
+	.arrows .arrowhead { display: inline-block; transform: scaleX(-1); }
+</style>
+</head>
+<body>
+	<div class="title">Nextcloud Bookmark Manager</div>
+	<div class="subtitle">for macOS · Apple Silicon</div>
+	<div class="arrows"><span class="arrowhead">‹‹</span></div>
+	<div class="hint">Drag the app into <span class="accent">Applications</span> to install</div>
+</body>
+</html>

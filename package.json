@@ -6,7 +6,8 @@
   "main": "dist/js/main.min.js",
   "scripts": {
     "start": "electron .",
-    "package": "gulp build && electron-packager . --asar --overwrite --platform=darwin --arch=arm64 --icon=dist/assets/icon/icon.icns --ignore=\"app-source|gulpfile\\.js|README\\.md\" --prune --out=build --darwinDarkModeSupport=true"
+    "package": "gulp build && electron-packager . --asar --overwrite --platform=darwin --arch=arm64 --icon=dist/assets/icon/icon.icns --ignore=\"app-source|gulpfile\\.js|README\\.md\" --prune --out=build --darwinDarkModeSupport=true",
+    "dmg": "node scripts/dmg/make-dmg.js"
   },
   "author": {
     "name": "D.G. Midwinter",
@@ -56,6 +57,7 @@
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",
+    "appdmg": "^0.6.6",
     "electron": "^34.0.0",
     "gulp": "^4.0.2",
     "gulp-autoprefixer": "^7.0.1",
@@ -70,5 +72,10 @@
     "pump": "^3.0.0",
     "reset-css": "^5.0.1",
     "sass": "^1.80.0"
+  },
+  "allowScripts": {
+    "macos-alias@0.2.12": true,
+    "ds-store@0.1.6": true,
+    "fs-xattr@0.3.1": true
   }
 }
