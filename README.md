@@ -4,22 +4,42 @@
 
 A Mac App for accessing and managing Nextcloud bookmarks.
 
+> **Fork notice** — This is a maintained fork of [dgmid/nextcloud-bookmark-manager](https://github.com/dgmid/nextcloud-bookmark-manager) by [@dgmid](https://github.com/dgmid).
+> All credit for the original app — concept, design, code and EN/IT translations — belongs to the original author.
+> Upstream has been inactive for some time, so this fork carries the project forward with fixes and improvements,
+> in the hope of being useful to the people who still rely on the app today.
+
+## Downloads
+
+Prebuilt macOS binaries (Apple Silicon `arm64`) are available on the [Releases](https://github.com/aknari/nextcloud-bookmark-manager/releases) page.
+
+> The builds are **unsigned** — on first launch, right-click the app and choose **Open** (macOS Gatekeeper).
+
 ![ncbm-2 0 3-light](https://user-images.githubusercontent.com/1267580/81381652-55e69a80-910d-11ea-9c6a-8247512325a0.png)
 <small>*dark mode*</small>
 
 ![ncbm-2 0 3-dark](https://user-images.githubusercontent.com/1267580/81381733-77e01d00-910d-11ea-8385-3783ba81b0bf.png)
 <small>*light mode*</small>
 
+## What's changed in this fork (vs upstream)
+
+- **v3.0.x**: upgraded to **Electron 34**, added **AI-assisted bookmark management** (Auto-Tag, Auto-Organize with destination folders and learned-structure profiles, Repair Titles — bring your own Gemini/OpenRouter/local API key), favicons on demand and a smarter Check Broken Links
+- **Auto-Organize move semantics**: bookmarks already organized in the destination are withdrawn from the source folder on Apply; empty source/destination folders can be cleaned up afterwards
+- Settings such as "Max items per folder" are remembered across sessions
+- Fixed a renderer crash in packaged builds and a full-refresh timeout on large accounts
+- Packaging works on modern Node (`@electron/packager` 20)
+
+See the [release notes](https://github.com/aknari/nextcloud-bookmark-manager/releases) for details.
+
 ## Requirements
 
 [node.js / npm](https://www.npmjs.com/get-npm)
 A server running [Nextcloud](https://nextcloud.com/) with the [Bookmarks](https://github.com/nextcloud/bookmarks) app installed
 
-To build this project you will need to install **electron packager** and **asar**
+No global installs are needed — `npm install` brings everything (including `@electron/packager`) as dev dependencies:
 
 ```shell
-npm install -g electron-packager
-npm install -g asar
+npm install
 ```
 
 ## Quick Start
@@ -136,3 +156,9 @@ Translations for this app are by:
 | --- | --- |
 | EN | [dgmid](https://github.com/dgmid) |
 | IT | [dgmid](https://github.com/dgmid) |
+| ES | [@aknari](https://github.com/aknari) |
+
+## Credits
+
+- **[@dgmid](https://github.com/dgmid)** — original author of the Nextcloud Bookmark Manager: app, design, code, EN/IT translations. This fork exists thanks to his work.
+- The original project lives at [dgmid/nextcloud-bookmark-manager](https://github.com/dgmid/nextcloud-bookmark-manager).
