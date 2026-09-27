@@ -12,6 +12,7 @@
     "overridecap": "Elabora tutti per questa esecuzione (temporaneo)",
     "home": "Home",
     "nobookmarks": "Nessun segnalibro trovato in questa cartella — seleziona prima una cartella",
+    "onlywithdraw": "Nessun segnalibro da classificare — all'applicazione verranno rimossi {{count}} segnalibro/i già organizzati da questa cartella",
     "profile": "Profilo di organizzazione",
     "noprofile": "Nessuno (l'IA decide liberamente)",
     "defaultprofile": "Predefinito (integrato)",
@@ -51,6 +52,7 @@
     "moving": "Spostamento segnalibro {{current}} di {{total}}",
     "deleting": "Eliminazione cartella vuota {{current}} di {{total}}",
     "scanning": "Ricerca cartelle vuote…",
+    "withdrawing": "Rimozione di {{current}} di {{total}} segnalibri già organizzati dalla cartella di origine",
     "rebalancing": "Riequilibrio cartelle…",
     "quota": "Quota API raggiunta — nuovo tentativo tra {{wait}}s…",
     "quota_minute_title": "Quota API raggiunta — nuovo tentativo automatico",
@@ -66,10 +68,13 @@
  "quota_box_done": "⚠ <strong>La classificazione è terminata ({{moved}} di {{total}} segnalibri), ma la fase di riequilibrio è stata interrotta dalla quota API.</strong> La proposta qui sotto è completa e puoi ancora applicarla — tuttavia le cartelle NON sono state riequilibrate al massimo configurato, quindi alcune possono contenere più elementi del limite. Non è stato modificato nulla sul server.",
  "api_calls": "Questa esecuzione ha effettuato <strong>{{n}}</strong> chiamate API.",
     "api_calls_stopped": "Questa esecuzione ha effettuato <strong>{{n}}</strong> chiamate API prima che la quota la interrompesse.",
-    "mechanical": "ℹ La fase di bilanciamento IA è stata interrotta, quindi <strong>{{count}}</strong> cartella/e sovraffollata/e sono state bilanciate senza IA (raggruppate per sito/dominio)."
+    "mechanical": "ℹ La fase di bilanciamento IA è stata interrotta, quindi <strong>{{count}}</strong> cartella/e sovraffollata/e sono state bilanciate senza IA (raggruppate per sito/dominio).",
+    "excluded": "ℹ <strong>{{count}}</strong> cartella/e esistente/i con nomi poco descrittivi o molto oltre il limite di dimensione NON sono state riutilizzate — i loro segnalibri sono stati ridistribuiti nella nuova struttura.",
+    "withdrawn": "ℹ <strong>{{count}}</strong> segnalibro/i sono già organizzati nella destinazione — all'applicazione verranno rimossi dalla cartella di origine «{{source}}»."
   },
   "results": {
     "empty": "Nessuno spostamento proposto.",
+    "onlywithdraw": "Niente da riclassificare — all'applicazione verranno rimossi dalla cartella di origine i {{count}} segnalibro/i già organizzati indicati sopra.",
     "new": "NUOVA",
     "unassigned": "Non assegnati"
   },
@@ -78,6 +83,8 @@
     "title_cancel": "Auto-Organizza annullato",
     "applied": "Spostamenti applicati a {{count}} segnalibri.",
     "skipped": "{{skipped}} saltati.",
+    "withdrawn": "{{count}} già organizzati e rimossi dalla cartella di origine.",
+    "withdrawn_only": "Rimossi {{count}} segnalibro/i già organizzati dalla cartella di origine.",
     "cancelled": "Operazione annullata.",
     "emptied": "{{deleted}} cartelle vuote rimosse.",
     "noempty": "Nessuna cartella vuota trovata in questo ambito.",
@@ -91,5 +98,11 @@
       "confirm": "Elimina cartelle vuote",
       "cancel": "Annulla"
     }
+  },
+  "status": {
+    "scanned": "Elaborazione completata — rivedi gli spostamenti proposti qui sotto.",
+    "applied": "Spostamenti applicati al server ({{count}} segnalibri).",
+    "withdrawn": "Pulizia della cartella di origine applicata ({{count}} segnalibri).",
+    "cancelled": "Operazione annullata — nessuna modifica applicata."
   }
 }

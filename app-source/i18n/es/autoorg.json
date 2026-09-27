@@ -12,6 +12,7 @@
     "overridecap": "Procesar todos en esta ejecución (temporal)",
     "home": "Inicio",
     "nobookmarks": "No se encontraron marcadores en esta carpeta — selecciona primero una carpeta",
+    "onlywithdraw": "No hay marcadores que clasificar — al aplicar se quitarán {{count}} marcador(es) ya organizados de esta carpeta",
     "profile": "Perfil de organización",
     "noprofile": "Ninguno (la IA decide libremente)",
     "defaultprofile": "Predeterminado (integrado)",
@@ -51,6 +52,7 @@
     "moving": "Moviendo marcador {{current}} de {{total}}",
     "deleting": "Eliminando carpeta vacía {{current}} de {{total}}",
     "scanning": "Buscando carpetas vacías…",
+    "withdrawing": "Quitando {{current}} de {{total}} marcadores ya organizados de la carpeta de origen",
     "rebalancing": "Reequilibrando carpetas…",
     "quota": "Cuota de API alcanzada — reintentando en {{wait}}s…",
     "quota_minute_title": "Cuota de API alcanzada — reintentando automáticamente",
@@ -66,10 +68,13 @@
     "quota_box_done": "⚠ <strong>La clasificación terminó ({{moved}} de {{total}} marcadores), pero el rebalanceo se detuvo por la cuota de la API.</strong> La propuesta de abajo está completa y todavía puedes aplicarla — sin embargo, las carpetas NO se reequilibraron al máximo configurado, así que algunas pueden tener más elementos del límite. No se ha cambiado nada en el servidor.",
     "api_calls": "Esta ejecución realizó <strong>{{n}}</strong> llamadas a la API.",
     "api_calls_stopped": "Esta ejecución realizó <strong>{{n}}</strong> llamadas a la API antes de que la cuota la detuviera.",
-    "mechanical": "ℹ El pase de equilibrio con IA se interrumpió, así que <strong>{{count}}</strong> carpeta(s) desbordada(s) se equilibraron sin IA (agrupadas por sitio/dominio)."
+    "mechanical": "ℹ El pase de equilibrio con IA se interrumpió, así que <strong>{{count}}</strong> carpeta(s) desbordada(s) se equilibraron sin IA (agrupadas por sitio/dominio).",
+    "excluded": "ℹ <strong>{{count}}</strong> carpeta(s) existente(s) con nombres poco descriptivos o muy por encima del límite de tamaño NO se reutilizaron — sus marcadores se redistribuyeron en la nueva estructura.",
+    "withdrawn": "ℹ <strong>{{count}}</strong> marcador(es) ya están organizados dentro del destino — al aplicar se quitarán de la carpeta de origen «{{source}}»."
   },
   "results": {
     "empty": "No se propusieron movimientos.",
+    "onlywithdraw": "Nada que reclasificar — al aplicar se quitarán de la carpeta de origen los {{count}} marcador(es) ya organizados indicados arriba.",
     "new": "NUEVA",
     "unassigned": "Sin asignar"
   },
@@ -78,6 +83,8 @@
     "title_cancel": "Auto-Organización cancelada",
     "applied": "Movimientos aplicados a {{count}} marcadores.",
     "skipped": "{{skipped}} omitidos.",
+    "withdrawn": "{{count}} ya organizados y quitados de la carpeta de origen.",
+    "withdrawn_only": "Se quitaron {{count}} marcador(es) ya organizados de la carpeta de origen.",
     "cancelled": "Operación cancelada.",
     "emptied": "{{deleted}} carpetas vacías eliminadas.",
     "noempty": "No se encontraron carpetas vacías en este ámbito.",
@@ -95,6 +102,7 @@
   "status": {
     "scanned": "Proceso completado — revisa los movimientos propuestos a continuación.",
     "applied": "Movimientos aplicados al servidor ({{count}} marcadores).",
+    "withdrawn": "Limpieza de la carpeta de origen aplicada ({{count}} marcadores).",
     "cancelled": "Operación cancelada — no se aplicaron cambios."
   }
 }

@@ -58,10 +58,13 @@ const i18nextOptions = {
 	defaultNS: 'app',
 	backend:{
 		loadPath: path.join(__dirname, '../i18n/{{lng}}/{{ns}}.json'),
-		addPath: path.join(__dirname, '../i18n/{{lng}}/{{ns}}.missing.json'),
 	jsonIndent: 2,
 	},
-	saveMissing: true,
+	//note(dgmid): saveMissing MUST stay off in packaged builds — i18next would try to
+	//write '<ns>.missing.json' next to the resources and the app.asar is read-only,
+	//which crashes the renderer (ENOTDIR) at the first missing key (seen live in
+	//auto-organize: the crash hid the "Apply to Server" button with results on screen).
+	saveMissing: false,
 	initImmediate: false
 }
 

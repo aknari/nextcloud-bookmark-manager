@@ -69,7 +69,8 @@ let context 			= null,		// { folderId, folderName, bookmarks: [{id,title,url,fol
 	sessionCap 			= 100,		// effective AI session cap (config value, possibly overridden for this run)
 	apiCallCount 		= 0,			// Gemini calls made this run (shown in the results summary)
 	rebalancedMechanical = 0,		// folders balanced by the no-AI (by-domain) fallback
-	excludedGuideCount 	= 0			// existing folders excluded from the reuse guide (junk / oversized)
+	excludedGuideCount 	= 0,			// existing folders excluded from the reuse guide (junk / oversized)
+	withdrawnCount 		= 0			// already-organized bookmarks removed from the source folder on Apply
 
 
 
@@ -223,6 +224,9 @@ function loadConfig() {
 	
 	$('#cfg-folder').text( folderName )
 	
+	//note(dgmid): restore the persisted "max items per folder" value across sessions
+	$('#max-per-folder').val( store.get( 'aiMaxPerFolder' ) || '' )
+	
 	refreshCount()
 	
 	return config
@@ -316,29 +320,22 @@ function refreshCount() {
 		workingBookmarks = allBookmarks.filter( b => ( b.folders || [] ).includes( fid ) )
 	}
 	
-	//note(dgmid): when reorganizing into a different destination, leave bookmarks that
-	//are already inside the destination (or its subfolders) alone — they're organized.
-	//Skip the exclusion when the destination is the source itself or an ancestor of it
-	//(e.g. moving up to Home): there the source scope lives INSIDE the destination
-	//subtree, so excluding it would wipe out the whole working set.
-	let dest = getDestId()
-	
-	if( dest !== fid && !isFolderAncestor( folders, dest, fid ) ) {
-		
-		let destIds = new Set( getDescendantIds( folders, dest ) )
-		
-		destIds.add( dest )
-		
-		workingBookmarks = workingBookmarks.filter( b => !( b.folders || [] ).some( f => destIds.has( f ) ) )
-	}
+	//note(dgmid): the working set comes from the SOURCE only (direct, or with subfolders
+	//when the checkbox says so). Bookmarks that already live inside the destination are
+	//NOT removed from the count here anymore: the classifier skips them ("already
+	//organized" — see processBookmarks) and the Apply step withdraws their stale
+	//source-folder membership instead. The old destination-exclusion filter silently
+	//emptied the working set and blocked runs that still had cleanup to do.
+	let dest = getDestId(),
+		alreadyCount = getWithdrawalList().length
 	
 	//note(dgmid): 🔍 DIAGNOSTIC — how big is the working scope, and why?
-	log.info( `[auto-organize] scope → folder=${fid} recursive=${recursive} inContext=${allBookmarks.length} working=${workingBookmarks.length} dest=${dest}` )
+	log.info( `[auto-organize] scope → folder=${fid} recursive=${recursive} inContext=${allBookmarks.length} working=${workingBookmarks.length} alreadyOrganized=${alreadyCount} dest=${dest}` )
 	
 	let maxSession = ( store.get( 'aiConfig' ) || {} ).maxPerSession || 100
 	sessionCap = maxSession
 	
-	if( workingBookmarks.length === 0 ) {
+	if( workingBookmarks.length === 0 && alreadyCount === 0 ) {
 		
 		$('#cfg-count').html(
 			'<span style="color:#856404;">' +
@@ -350,7 +347,20 @@ function refreshCount() {
 		
 	} else {
 		
-		$('#cfg-count').text( workingBookmarks.length )
+		if( workingBookmarks.length === 0 ) {
+			
+			//note(dgmid): nothing to classify, but Apply can still clean the source folder
+			$('#cfg-count').html(
+				'<span style="color:#0c5460;">' +
+				i18n.t('autoorg:label.onlywithdraw', 'No bookmarks to classify — Apply will remove {{count}} already-organized bookmark(s) from this folder', { count: alreadyCount }) +
+				'</span>'
+			)
+			
+		} else {
+			
+			$('#cfg-count').text( workingBookmarks.length )
+		}
+		
 		$('#btn-start').prop('disabled', false)
 		
 		if( workingBookmarks.length > maxSession ) {
@@ -2757,6 +2767,7 @@ function processBookmarks() {
 	unavailableModels = {}
 	moves = []
 	rebalancedMechanical = 0
+	withdrawnCount = 0
 	
 	hideQuotaNotice()
 	
@@ -2765,13 +2776,23 @@ function processBookmarks() {
 		primaryModel = resolvePrimaryModel( config.model ),
 		maxPerFolder = parseInt( $( '#max-per-folder' ).val() || '0', 10 ) || 0
 	
+	//note(dgmid): remember the per-folder limit for the next run (also saved on change)
+	store.set( 'aiMaxPerFolder', maxPerFolder > 0 ? String( maxPerFolder ) : '' )
+	
 	//note(dgmid): optional learned profile — guides the folder-name philosophy
 	let profileId 	= $( '#profile-select' ).val(),
-		profile 	= ( store.get( 'aiProfiles' ) || [] ).find( p => String( p.id ) === String( profileId ) ) || null
+		profile 	= ( store.get( 'aiProfiles' ) || [] ).find( p => String( p.id ) === String( profileId ) ) || null	//note(dgmid): "already organized" — bookmarks of the source that live anywhere inside
+	//the destination are NOT classified (their good spot in the destination must not be
+	//touched); the Apply step withdraws their stale source membership instead. Skipped
+	//when the destination is the source itself or an ancestor of it (there the source
+	//scope lives INSIDE the destination subtree, so excluding would wipe everything).
+	let toWithdrawNow = getWithdrawalList(),
+		withdrawIds = new Set( toWithdrawNow.map( b => b.id ) )
 	
-	let bookmarks = workingBookmarks
+	let bookmarks = workingBookmarks.filter( b => !withdrawIds.has( b.id ) )
 	
-	if( bookmarks.length === 0 ) {
+	if( bookmarks.length === 0 && toWithdrawNow.length === 0 ) {
+		
 		processing = false
 		return
 	}
@@ -3146,6 +3167,13 @@ function showResults() {
 	$('#step-progress').hide()
 	$('#step-results').show()
 	
+	//note(dgmid): show the action buttons FIRST, before any translation work. If a
+	//localized string ever throws inside a packaged build, the results are already
+	//usable — the user can still review and Apply instead of a half-dead modal.
+	$('#btn-accept-all').show()
+	$('#btn-apply').show()
+	$('#btn-close').text( i18n.t('autoorg:button.close', 'Close') )
+	
 	//note(dgmid): the run just finished — reflect it under the footer buttons
 	setActionStatus( i18n.t( 'autoorg:status.scanned', 'Run complete — review the proposed moves below.' ) )
 	
@@ -3213,6 +3241,21 @@ function showResults() {
 		) +
 		'</div>'
 	
+	//note(dgmid): already-organized bookmarks that will lose their stale source-folder
+	//membership on Apply — say so up front, the user must know Apply goes further
+	//than the list above
+	let toWithdrawPreview = getWithdrawalList()
+	
+	if( toWithdrawPreview.length > 0 ) {
+		
+		summaryHtml += '<div style="margin:8px 0;padding:10px 12px;border-radius:6px;background:#d1ecf1;border:1px solid #bee5eb;color:#0c5460;font-size:12px;line-height:1.5;">' +
+			i18n.t( 'autoorg:summary.withdrawn', 'ℹ <strong>{{count}}</strong> bookmark(s) are already organized inside the destination — on Apply they will be removed from the source folder “{{source}}”.', {
+				count: toWithdrawPreview.length,
+				source: ( context && context.folderName ) ? context.folderName : '—'
+			}) +
+			'</div>'
+	}
+	
 	$('#summary-stats').html( summaryHtml )
 	
 	//note(dgmid): group by folder name, preserving first-seen order
@@ -3249,7 +3292,13 @@ function showResults() {
 	
 	if( groups.length === 0 ) {
 		
-		$list.html( `<div class="empty-state">` + i18n.t('autoorg:results.empty', 'No moves were proposed.') + `</div>` )
+		//note(dgmid): a 0-move run is not "nothing happened" when the source cleanup is
+		//pending — say what Apply WILL do instead of the generic empty message
+		$list.html( `<div class="empty-state">` +
+			( toWithdrawPreview.length > 0
+				? i18n.t('autoorg:results.onlywithdraw', 'Nothing to reclassify — Apply will remove the {{count}} already-organized bookmark(s) above from the source folder.', { count: toWithdrawPreview.length })
+				: i18n.t('autoorg:results.empty', 'No moves were proposed.') ) +
+			`</div>` )
 		
 	} else {
 		
@@ -3312,9 +3361,6 @@ function showResults() {
 		}
 	})
 	
-	$('#btn-accept-all').show()
-	$('#btn-apply').show()
-	$('#btn-close').text( i18n.t('autoorg:button.close', 'Close') )
 }
 
 
@@ -3544,13 +3590,99 @@ $('#btn-accept-all').click( function() {
 			})
 		})
 	}
+//note(dgmid): "real move" completion — bookmarks that were EXCLUDED from the run
+//because they already live inside the destination but still hang from the source
+//folder must lose that stale source membership when the user applies. Without this
+//they stay in the source folder forever (an inbox that never empties). The server
+//deletes a bookmark that loses its LAST folder, so every withdrawal is guarded by a
+//check that the bookmark keeps at least one other folder.
+
+function getWithdrawalList() {
+	
+	let sourceId = ( context && context.folderId != null ) ? context.folderId : -1,
+		destId 	= getDestId(),
+		allBookmarks = ( context && context.bookmarks ) ? context.bookmarks : []
+	
+	if( sourceId === -1 ) return [] // Home membership is virtual — nothing to withdraw
+	
+	if( destId === sourceId ) return [] // same-folder runs reassign memberships themselves
+	
+	//note(dgmid): destination subtree — "already organized" means living anywhere inside it
+	let destIds = new Set( getDescendantIds( store.get( 'folders' ) || [], destId ) )
+	destIds.add( destId )
+	
+	//note(dgmid): bookmarks already being REASSIGNED by this run are handled by their
+	//own PUT (which replaces the whole folder list) — never double-handle them here.
+	//Only moves WITH a destination count: buildMoves also emits empty stubs for
+	//unclassified bookmarks (e.g. the "already organized" ones), and treating those
+	//as "being moved" would cancel every withdrawal.
+	let beingMoved = new Set( moves.filter( m => m.folderName ).map( m => m.id ) )
+	
+	return allBookmarks.filter( b =>
+		!beingMoved.has( b.id ) &&
+		( b.folders || [] ).includes( sourceId ) &&
+		( b.folders || [] ).some( f => destIds.has( f ) )
+	)
+}
+
+//note(dgmid): remove the accepted withdrawals from the source folder (after the moves)
+
+function runWithdrawals( list, done ) {
+	
+	if( !list || !list.length ) { done(); return }
+	
+	log.info( `[auto-organize] withdrawal → removing ${list.length} already-organized bookmark(s) from the source folder` )
+	
+	let wi = 0
+	
+	function next() {
+		
+		if( cancelled || wi >= list.length ) { done(); return }
+		
+		setProgress( wi + 1, list.length,
+			i18n.t('autoorg:progress.withdrawing', 'Removing {{current}} of {{total}} already-organized bookmarks from the source folder', {
+				current: wi + 1,
+				total: list.length
+			})
+		)
+		
+		let b = list[wi]
+		
+		//note(dgmid): never remove a bookmark's last folder — the server would delete
+		//the bookmark itself. Skip it (and do not count it as withdrawn) instead.
+		if( !Array.isArray( b.folders ) || b.folders.length < 2 ) {
+			
+			log.warn( `auto-organize: withdrawal skipped for bookmark ${b.id} — it would lose its last folder` )
+			wi++
+			setTimeout( next, 100 )
+			return
+		}
+		
+		fetchApi.bookmarksApi( 'deletefromfolder', sourceFolderIdForWithdrawal(), '/bookmarks/' + b.id, function( response ) {
+			
+			if( response !== null ) withdrawnCount++
+			
+			wi++
+			setTimeout( next, 150 )
+		})
+	}
+	
+	next()
+}
+
+function sourceFolderIdForWithdrawal() {
+	
+	return ( context && context.folderId != null ) ? context.folderId : -1
+}
+
 //note(dgmid): apply accepted moves to the server — create new folders, then move bookmarks
 
 $('#btn-apply').click( function() {
 	
-	let toApply = moves.filter( m => m.accepted && m.folderName )
+	let toApply = moves.filter( m => m.accepted && m.folderName ),
+		toWithdraw = getWithdrawalList()
 	
-	if( toApply.length === 0 ) {
+	if( toApply.length === 0 && toWithdraw.length === 0 ) {
 		
 		ipcRenderer.send('show-error-box', {
 			title: i18n.t('autoorg:error.nomoves_title', 'No Moves to Apply'),
@@ -3593,7 +3725,18 @@ $('#btn-apply').click( function() {
 		movedCount 		= 0,
 		skippedCount 	= 0
 	
-	createFolderPaths( 0 )
+	//note(dgmid): global (shared with the top-level runWithdrawals helper) — reset per apply
+	withdrawnCount = 0
+	
+	//note(dgmid): "real move" completion — first drop the stale source-folder membership
+	//of bookmarks that were already organized in the destination (they were excluded
+	//from the run and are NOT in toApply, so nothing else removes them), then create
+	//the new folders and reassign the moved bookmarks
+	
+	runWithdrawals( toWithdraw, function() {
+		
+		createFolderPaths( 0 )
+	})
 	
 	//note(dgmid): parse the created folder id from the addfolder response
 	
@@ -3809,7 +3952,15 @@ $('#btn-apply').click( function() {
 		if( success ) {
 			
 			$('#btn-apply').addClass( 'done' )
-			setActionStatus( i18n.t( 'autoorg:status.applied', 'Moves applied to the server ({{count}} bookmarks).', { count: movedCount } ) )
+			
+			if( movedCount > 0 || withdrawnCount === 0 ) {
+				
+				setActionStatus( i18n.t( 'autoorg:status.applied', 'Moves applied to the server ({{count}} bookmarks).', { count: movedCount } ) )
+				
+			} else {
+				
+				setActionStatus( i18n.t( 'autoorg:status.withdrawn', 'Source folder cleanup applied ({{count}} bookmarks).', { count: withdrawnCount } ) )
+			}
 			
 		} else {
 			
@@ -3818,11 +3969,19 @@ $('#btn-apply').click( function() {
 		}
 		
 		let msg = success
-			? i18n.t('autoorg:done.applied', 'Applied moves to {{count}} bookmarks.', { count: movedCount })
+			? ( movedCount > 0
+				? i18n.t('autoorg:done.applied', 'Applied moves to {{count}} bookmarks.', { count: movedCount })
+				: i18n.t('autoorg:done.withdrawn_only', 'Removed {{count}} already-organized bookmark(s) from the source folder.', { count: withdrawnCount }) )
 			: i18n.t('autoorg:done.cancelled', 'Operation cancelled.')
 		
 		if( success && skippedCount > 0 ) {
+			
 			msg += ' ' + i18n.t('autoorg:done.skipped', '{{skipped}} skipped.', { skipped: skippedCount })
+		}
+		
+		if( success && withdrawnCount > 0 ) {
+			
+			msg += ' ' + i18n.t('autoorg:done.withdrawn', '{{count}} already organized and removed from the source folder.', { count: withdrawnCount })
 		}
 		
 		if( success && $( '#chk-delete-empty' ).is( ':checked' ) ) {
@@ -3857,6 +4016,18 @@ $('#btn-apply').click( function() {
 		
 		$('#btn-close').text( i18n.t('autoorg:button.close', 'Close') )
 	}
+})
+
+
+
+//note(dgmid): persist the per-folder limit as soon as it changes — survives closing
+//the modal without starting a run
+
+$('#max-per-folder').on( 'change', function() {
+	
+	let v = parseInt( $(this).val() || '0', 10 ) || 0
+	
+	store.set( 'aiMaxPerFolder', v > 0 ? String( v ) : '' )
 })
 
 

@@ -12,6 +12,7 @@
     "overridecap": "Process all for this run (temporary)",
     "home": "Home",
     "nobookmarks": "No bookmarks found in this folder — select a folder first",
+    "onlywithdraw": "No bookmarks to classify — Apply will remove {{count}} already-organized bookmark(s) from this folder",
     "profile": "Organization Profile",
     "noprofile": "None (AI decides freely)",
     "defaultprofile": "Default (built-in)",
@@ -20,7 +21,7 @@
     "reusedest": "Use the destination's existing structure as a guide",
     "deleteempty": "Delete empty folders left behind after organizing",
     "consider_existing": "Consider existing folders (reuse what's already there)",
-    "others": "Otros"
+    "others": "Others"
   },
   "hint": {
     "profile": "Optional: apply a learned organizational philosophy",
@@ -51,6 +52,7 @@
     "moving": "Moving bookmark {{current}} of {{total}}",
     "deleting": "Deleting empty folder {{current}} of {{total}}",
     "scanning": "Scanning for empty folders…",
+    "withdrawing": "Removing {{current}} of {{total}} already-organized bookmarks from the source folder",
     "rebalancing": "Rebalancing folders…",
     "quota": "API quota reached — retrying in {{wait}}s…",
     "quota_minute_title": "API quota reached — retrying automatically",
@@ -66,10 +68,13 @@
     "quota_box_done": "⚠ <strong>Classification finished ({{moved}} of {{total}} bookmarks), but the rebalancing pass was stopped by the API quota.</strong> The proposal below is complete and you can still apply it — however, folders were NOT rebalanced to the configured maximum, so some may hold more items than the limit. Nothing has been changed on the server yet.",
     "api_calls": "This run made <strong>{{n}}</strong> API calls.",
     "api_calls_stopped": "This run made <strong>{{n}}</strong> API calls before the API quota stopped it.",
-    "mechanical": "ℹ The AI rebalancing pass was cut short, so <strong>{{count}}</strong> overfull folder(s) were balanced without AI (grouped by website/domain)."
+    "mechanical": "ℹ The AI rebalancing pass was cut short, so <strong>{{count}}</strong> overfull folder(s) were balanced without AI (grouped by website/domain).",
+    "excluded": "ℹ <strong>{{count}}</strong> existing folder(s) with non-descriptive names or far over the size limit were NOT reused — their bookmarks were redistributed into the new structure.",
+    "withdrawn": "ℹ <strong>{{count}}</strong> bookmark(s) are already organized inside the destination — on Apply they will be removed from the source folder “{{source}}”."
   },
   "results": {
     "empty": "No moves were proposed.",
+    "onlywithdraw": "Nothing to reclassify — Apply will remove the {{count}} already-organized bookmark(s) above from the source folder.",
     "new": "NEW",
     "unassigned": "Unassigned"
   },
@@ -78,6 +83,8 @@
     "title_cancel": "Auto-Organize Cancelled",
     "applied": "Applied moves to {{count}} bookmarks.",
     "skipped": "{{skipped}} skipped.",
+    "withdrawn": "{{count}} already organized and removed from the source folder.",
+    "withdrawn_only": "Removed {{count}} already-organized bookmark(s) from the source folder.",
     "cancelled": "Operation cancelled.",
     "emptied": "{{deleted}} empty folders removed.",
     "noempty": "No empty folders were found in this scope.",
@@ -95,6 +102,7 @@
   "status": {
     "scanned": "Run complete — review the proposed moves below.",
     "applied": "Moves applied to the server ({{count}} bookmarks).",
+    "withdrawn": "Source folder cleanup applied ({{count}} bookmarks).",
     "cancelled": "Operation cancelled — no changes were applied."
   }
 }

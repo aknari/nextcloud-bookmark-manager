@@ -175,10 +175,12 @@ module.exports.bookmarksApi = function( call, id, data, callback ) {
 			// the connection after sending an empty body (e.g. 204 No Content).
 			// This prevents callers (like check-broken-links) from hanging forever.
 			let bodyTimeout = setTimeout( () => {}, 0 )
+			//note(dgmid): 60s — the 'all' bookmark listing can be tens of MB on large
+			//accounts; a 10s body timeout made every full refresh fail on those servers.
 			return Promise.race([
 				response.text().finally( () => clearTimeout( bodyTimeout ) ),
 				new Promise( (_, reject) => {
-					bodyTimeout = setTimeout( () => reject( new Error( 'timeout reading response body' ) ), 10000 )
+					bodyTimeout = setTimeout( () => reject( new Error( 'timeout reading response body' ) ), 60000 )
 				})
 			])
 		}
