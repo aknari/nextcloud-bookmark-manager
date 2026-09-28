@@ -13,3 +13,6 @@ npm-debug.log
 .vscode/
 .aider*
 .env
+
+# Local export dump (never commit)
+export.html

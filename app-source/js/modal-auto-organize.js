@@ -3662,9 +3662,25 @@ function runWithdrawals( list, done ) {
 			
 			if( response !== null ) withdrawnCount++
 			
+			advance()
+		})
+		
+		//note(dgmid): watchdog — bookmarksApi can return without ever calling its
+		//callback (e.g. credentials vanished mid-run). Without this the whole apply
+		//hangs here: no summary, no cleanup dialog, no refresh of the main window.
+		let advanced = false
+		
+		function advance() {
+			
+			if( advanced ) return
+			
+			advanced = true
+			
 			wi++
 			setTimeout( next, 150 )
-		})
+		}
+		
+		setTimeout( advance, 30000 )
 	}
 	
 	next()
@@ -3984,28 +4000,10 @@ $('#btn-apply').click( function() {
 			msg += ' ' + i18n.t('autoorg:done.withdrawn', '{{count}} already organized and removed from the source folder.', { count: withdrawnCount })
 		}
 		
-		if( success && $( '#chk-delete-empty' ).is( ':checked' ) ) {
-			
-			$('#btn-close').text( i18n.t('autoorg:button.close', 'Close') )
-			
-			deleteEmptyFolders( toApply, function( info ) {
-				
-				if( info && info.deleted > 0 ) {
-					msg += ' ' + i18n.t('autoorg:done.emptied', '{{deleted}} empty folders removed.', { deleted: info.deleted })
-				}
-				
-				ipcRenderer.send('show-error-box', {
-					title: i18n.t('autoorg:done.title', 'Auto-Organize Complete'),
-					content: msg
-				})
-				
-				//note(dgmid): refresh bookmarks — send to 'refresh' channel (main.js forwards to main window)
-				ipcRenderer.send( 'refresh', 'refresh-bookmarks' )
-			})
-			
-			return
-		}
-		
+		//note(dgmid): summary + main-window refresh FIRST — the cleanup sweep below
+		//downloads the whole bookmark catalogue (tens of seconds on large accounts)
+		//and used to delay both the completion dialog and the refresh until it was
+		//done. Closing the modal during the sweep killed the refresh entirely.
 		ipcRenderer.send('show-error-box', {
 			title: success ? i18n.t('autoorg:done.title', 'Auto-Organize Complete') : i18n.t('autoorg:done.title_cancel', 'Auto-Organize Cancelled'),
 			content: msg
@@ -4015,6 +4013,35 @@ $('#btn-apply').click( function() {
 		ipcRenderer.send( 'refresh', 'refresh-bookmarks' )
 		
 		$('#btn-close').text( i18n.t('autoorg:button.close', 'Close') )
+		
+		if( success && $( '#chk-delete-empty' ).is( ':checked' ) ) {
+			
+			//note(dgmid): withdrawals empty the source folder too — when toApply is
+			//empty (everything was already organized) the sweep must still consider
+			//the folders that held the withdrawn bookmarks
+			deleteEmptyFolders( toApply.length ? toApply : toWithdraw, function( info ) {
+				
+				$('#step-progress').hide()
+				$('#step-results').show()
+				
+				if( info && info.deleted > 0 ) {
+					
+					ipcRenderer.send('show-error-box', {
+						title: i18n.t('autoorg:done.title', 'Auto-Organize Complete'),
+						content: i18n.t('autoorg:done.emptied', '{{deleted}} empty folders removed.', { deleted: info.deleted })
+					})
+					
+					//note(dgmid): folders were removed — refresh again so the main window shows it
+					ipcRenderer.send( 'refresh', 'refresh-bookmarks' )
+				}
+			})
+			
+			//note(dgmid): showResults() hid the progress step — bring it back while the
+			//cleanup scan runs, otherwise the modal looks frozen for the whole scan
+			setProgress( 0, 1, i18n.t('autoorg:progress.scanning', 'Scanning for empty folders…') )
+			$('#step-results').hide()
+			$('#step-progress').show()
+		}
 	}
 })
 

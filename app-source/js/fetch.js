@@ -112,7 +112,13 @@ module.exports.bookmarksApi = function( call, id, data, callback ) {
 		degraded	= !!store.get( '_serverDegraded' )
 	
 	if( !server || !username || !password ) {
+		
 		log.warn( 'fetch: credentials missing — aborting call' )
+		
+		//note(dgmid): always settle the callback — bulk loops (auto-organize withdrawals,
+		//check-broken-links) hang forever waiting for a response that never comes
+		if( callback ) callback( null )
+		
 		return
 	}
 	
