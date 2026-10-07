@@ -23,7 +23,9 @@
     "autoorg": "Auto-Organizza Segnalibri…",
     "learn": "Impara la struttura delle cartelle…",
     "ai": "Impostazioni IA…",
-    "repairtitles": "Ripara Titoli…"
+    "repairtitles": "Ripara Titoli…",
+    "cleanupempty": "Pulisci cartelle vuote…",
+    "exportaz": "Esporta file segnalibri (A–Z)…"
   },
   "edit": {
     "edit": "Modifica",

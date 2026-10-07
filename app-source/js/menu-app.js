@@ -159,6 +159,10 @@ module.exports.menuApp = function () {
 					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('check-broken-links', 'check-broken-links') }
 				},
 				{
+					label: i18n.t('menu:bookmarks.cleanupempty', 'Clean Up Empty Folders…'),
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('clean-empty-folders', 'clean-empty-folders') }
+				},
+				{
 					type: 'separator'
 				},
 				{

@@ -1312,6 +1312,43 @@ function moveBookmarkToFolder( bookmarkId, folderId ) {
 
 
 
+//note(dgmid): move several bookmarks at once (multi-selection drag). Each bookmark
+//gets its own 'modify' call — it REPLACES the whole folder assignment, which is what
+//a drag&drop move means — but the table refreshes once, when the last one finishes.
+
+function moveBookmarksBulk( ids, folderId ) {
+	
+	if( !ids || !ids.length ) return
+	
+	let pending = ids.length,
+		done = function() {
+			
+			if( --pending <= 0 ) refreshAll()
+		}
+	
+	for( let bookmarkId of ids ) {
+		
+		let data = '?record_id=' + bookmarkId + '&folders[]=' + folderId
+		
+		fetch.bookmarksApi( 'modify', bookmarkId, data, function( response ) {
+			
+			if( response !== null ) {
+				
+				let bm = _rawBookmarks.find( b => b.id === bookmarkId )
+				
+				if( bm ) {
+					bm.folders = [ folderId ]
+					updateBookmarkRowLocal( bm )
+				}
+			}
+			
+			done()
+		})
+	}
+}
+
+
+
 //note(dgmid): strip events — click navigates, drag & drop moves
 
 $('#folder-strip').on( 'click', '.folder-card', function() {
@@ -1394,11 +1431,33 @@ $('#bookmarks tbody').on( 'dragstart', 'tr', function( e ) {
 	
 	let id = row.data()[0]
 	
+	//note(dgmid): a drag must carry the WHOLE selection, not just the row under the
+	//pointer — ⌘/Ctrl and Shift selections live in the DataTable selection state, so
+	//read them here and always include the row the drag actually started on
+	//(it may not be part of the selection when the grab lands on an unselected row).
+	let dragIds = []
+	
+	try {
+		
+		let selRows = maintable.bookmarkTable.rows({ selected: true }).data().toArray()
+		
+		for( let r of selRows ) {
+			if( r[0] !== id ) dragIds.push( r[0] )
+		}
+		
+	} catch( e2 ) {
+		
+		log.warn( 'dragstart: could not read selection - falling back to single-row drag' )
+	}
+	
+	dragIds.unshift( id )
+	
 	_dragType 	= 'bookmark'
 	_dragId 	= id
+	_dragIds 	= dragIds
 	_dragInvalid = null
 	
-	e.originalEvent.dataTransfer.setData( 'text/plain', 'bookmark:' + id )
+	e.originalEvent.dataTransfer.setData( 'text/plain', 'bookmark:' + dragIds.join( ',' ) )
 	e.originalEvent.dataTransfer.effectAllowed = 'move'
 	
 	$(this).addClass( 'dragging' )
@@ -1473,7 +1532,10 @@ function handleFolderDrop( targetId ) {
 		
 	} else if( type === 'bookmark' && id != null ) {
 		
-		moveBookmarkToFolder( id, targetId )
+		//note(dgmid): single-row drags come through _dragIds too (see dragstart above)
+		let ids = ( _dragIds && _dragIds.length ) ? Array.from( _dragIds ) : [ id ]
+		
+		moveBookmarksBulk( ids, targetId )
 	}
 }
 
@@ -2473,6 +2535,16 @@ ipcRenderer.on('auto-organize-bookmarks', (event, message) => {
 	}
 	
 	modalWindow.openModal( 'file://' + __dirname + '/../html/auto-organize.html', 560, 560, false )
+})
+
+
+
+//note(dgmid): clean up empty folders without touching the AI — opens its own dedicated
+//              window, which runs the shared cleanup-empty module (scan → confirm → delete)
+
+ipcRenderer.on('clean-empty-folders', (event, message) => {
+	
+	modalWindow.openModal( 'file://' + __dirname + '/../html/cleanup-empty.html', 420, 300, false )
 })
 
 

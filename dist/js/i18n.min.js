@@ -50,6 +50,7 @@ const i18nextOptions = {
 		'menutable',
 		'version',
 		'autoorg',
+		'cleanup',
 		'autotag',
 		'aiconfig',
 		'learn',

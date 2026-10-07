@@ -24,7 +24,8 @@
     "learn": "Learn Folder Structure…",
     "ai": "AI Settings…",
     "repairtitles": "Repair Titles…",
-    "exportaz": "Export Bookmarks File (A–Z)…"
+    "exportaz": "Export Bookmarks File (A–Z)…",
+    "cleanupempty": "Clean Up Empty Folders…"
   },
   "edit": {
     "edit": "Edit",

@@ -184,6 +184,13 @@
 							<span data-i18n="autoorg:label.deleteempty">Delete empty folders left behind after organizing</span>
 						</label>
 					</li>
+					<li style="padding-bottom:6px;padding-left:18px;">
+						<label for="chk-delete-source" style="display:flex !important;align-items:center;gap:6px;cursor:pointer;">
+							<input type="checkbox" id="chk-delete-source" style="margin:0;flex:none;">
+							<span data-i18n="autoorg:label.deletesource">Also delete the source folder if it ends up empty</span>
+						</label>
+						<div class="hint" data-i18n="autoorg:hint.deletesource">Unchecked (default): the folder you started from is kept, so you can keep dropping new bookmarks into it</div>
+					</li>
 					<li style="padding-bottom:6px;">
 						<label for="chk-include-subfolders" style="display:flex !important;align-items:center;gap:6px;cursor:pointer;">
 							<input type="checkbox" id="chk-include-subfolders" style="margin:0;flex:none;">
@@ -239,7 +246,6 @@
 			<footer>
 				<span class="left">
 					<button id="btn-start" class="ui-button" type="button" data-i18n="autoorg:button.start">Start</button>
-					<button id="btn-clean-empty" class="ui-button" type="button" data-i18n="autoorg:button.cleanempty">Delete Empty Folders…</button>
 				</span>
 				<span id="action-status" class="action-status"></span>
 				<span class="right">

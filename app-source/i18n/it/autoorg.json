@@ -20,6 +20,7 @@
     "same": "Come l'origine (cartella corrente)",
     "reusedest": "Usa la struttura esistente della destinazione come guida",
     "deleteempty": "Elimina le cartelle vuote lasciate dopo l'organizzazione",
+    "deletesource": "Elimina anche la cartella di origine se resta vuota",
     "consider_existing": "Considera le cartelle esistenti (riutilizza ciò che c'è già)",
     "others": "Altri"
   },
@@ -27,6 +28,7 @@
     "profile": "Opzionale: applica una filosofia organizzativa appresa",
     "reusedest": "Si applica solo quando la destinazione è diversa dalla cartella di origine",
     "consider_existing": "Se disattivato, la struttura precedente delle cartelle viene scartata e l'IA riorganizza da zero usando solo il profilo selezionato",
+    "deletesource": "Non selezionato (predefinito): la cartella di partenza viene conservata, così puoi continuare ad aggiungervi nuovi segnalibri",
     "maxfolder": "Limite morbido: le cartelle che superano circa questo numero di elementi (segnalibri + sottocartelle) vengono divise in sottocartelle equilibrate; i gruppi vicini al limite restano uniti e le cartelle con un solo elemento vengono unite.",
     "minfolder": "Le nuove cartelle create da questa esecuzione con meno segnalibri di questo numero vengono unite alla cartella sorella più vicina (o spostate di un livello). Evita cartelle con un solo segnalibro. Le cartelle esistenti vengono rispettate."
   },
@@ -64,9 +66,9 @@
   },
   "summary": {
     "proposed": "Proposto lo spostamento di <strong>{{moved}}</strong> di {{total}} segnalibri in <strong>{{new}}</strong> cartelle nuove e <strong>{{existing}}</strong> cartelle esistenti.",
- "quota_box": "⚠ <strong>L'esecuzione è stata interrotta a causa della quota API.</strong> Solo <strong>{{moved}}</strong> di {{total}} segnalibri sono stati classificati — i rimanenti <strong>{{left}}</strong> NON sono stati elaborati e restano intatti sul server. La quota si azzera a mezzanotte, ora del Pacifico (tra circa <strong>{{hours}}h {{minutes}}m</strong>). Puoi chiudere questa finestra — non è stato modificato altro.",
- "quota_box_done": "⚠ <strong>La classificazione è terminata ({{moved}} di {{total}} segnalibri), ma la fase di riequilibrio è stata interrotta dalla quota API.</strong> La proposta qui sotto è completa e puoi ancora applicarla — tuttavia le cartelle NON sono state riequilibrate al massimo configurato, quindi alcune possono contenere più elementi del limite. Non è stato modificato nulla sul server.",
- "api_calls": "Questa esecuzione ha effettuato <strong>{{n}}</strong> chiamate API.",
+    "quota_box": "⚠ <strong>L'esecuzione è stata interrotta a causa della quota API.</strong> Solo <strong>{{moved}}</strong> di {{total}} segnalibri sono stati classificati — i rimanenti <strong>{{left}}</strong> NON sono stati elaborati e restano intatti sul server. La quota si azzera a mezzanotte, ora del Pacifico (tra circa <strong>{{hours}}h {{minutes}}m</strong>). Puoi chiudere questa finestra — non è stato modificato altro.",
+    "quota_box_done": "⚠ <strong>La classificazione è terminata ({{moved}} di {{total}} segnalibri), ma la fase di riequilibrio è stata interrotta dalla quota API.</strong> La proposta qui sotto è completa e puoi ancora applicarla — tuttavia le cartelle NON sono state riequilibrate al massimo configurato, quindi alcune possono contenere più elementi del limite. Non è stato modificato nulla sul server.",
+    "api_calls": "Questa esecuzione ha effettuato <strong>{{n}}</strong> chiamate API.",
     "api_calls_stopped": "Questa esecuzione ha effettuato <strong>{{n}}</strong> chiamate API prima che la quota la interrompesse.",
     "mechanical": "ℹ La fase di bilanciamento IA è stata interrotta, quindi <strong>{{count}}</strong> cartella/e sovraffollata/e sono state bilanciate senza IA (raggruppate per sito/dominio).",
     "excluded": "ℹ <strong>{{count}}</strong> cartella/e esistente/i con nomi poco descrittivi o molto oltre il limite di dimensione NON sono state riutilizzate — i loro segnalibri sono stati ridistribuiti nella nuova struttura.",

@@ -1,0 +1,262 @@
+'use strict'
+
+//note(dgmid): "Clean Up Empty Folders" — standalone module shared by the menu entry
+//and the auto-organize final cleanup. It finds folders whose ENTIRE subtree holds
+//zero bookmarks and deletes them bottom-up after explicit confirmation. A folder that
+//only contains (nested) empty folders — the classic "carpeta que solo tiene una
+//subcarpeta vacía" — is deleted whole: the empty children die first, then the parent
+//that just became empty, exactly like a file browser removing a directory tree.
+//
+//Design notes:
+//- Bookmark emptiness is judged on SERVER TRUTH: one 'all' download gives every
+//  bookmark's folder list, so a subtree is deletable only when it provably holds
+//  zero bookmarks. Guessing from the folder tree alone would be unsafe (leaves do
+//  hold bookmarks).
+//- Home (root) is never a candidate; every other folder is, at any depth.
+//- Every code path settles the callback exactly once — bulk callers must not hang.
+
+const { ipcRenderer } = require( 'electron' )
+const i18n		= require( './i18n.min' )
+const log		= require( 'electron-log' )
+const Store		= require( 'electron-store' )
+
+let store
+try {
+	store = new Store()
+} catch( e ) {
+	store = { get: () => null, set: () => {} }
+}
+
+const fetchApi = require( './fetch.min' )
+
+//note(dgmid): promise wrapper over the callback API — errors resolve to null and are
+//handled, never thrown
+
+function api( call, id, data ) {
+	
+	return new Promise( resolve => {
+		
+		fetchApi.bookmarksApi( call, id, data || '', function( response ) {
+			
+			resolve( response === undefined ? null : response )
+		})
+	})
+}
+
+function isRootParent( p ) {
+	
+	return ( p == null || p === -1 || p === '-1' )
+}
+
+module.exports.cleanupEmptyFolders = function( options, callback ) {
+	
+	//note(dgmid): backward-compatible signature — cleanupEmptyFolders( callback ) still
+	//works; callers that must protect folders use cleanupEmptyFolders( { keepIds: [] },
+	//callback ). Auto-Organize uses it to keep its SOURCE folder alive: the user reuses
+	//that folder to drop new bookmarks, so an emptied source must not be swept away
+	//unless the "delete the source folder too" checkbox says otherwise.
+	if( typeof options === 'function' ) {
+		
+		callback = options
+		options  = null
+	}
+	
+	let keepRequested = new Set( ( options && Array.isArray( options.keepIds ) ) ? options.keepIds : [] )
+	
+	let settled = false
+	
+	function finish( result ) {
+		
+		if( settled ) return
+		
+		settled = true
+		callback( result )
+	}
+	
+	//note(dgmid): without credentials every API call resolves null — report instead
+	//of showing a misleading "nothing found"
+	if( !store.get( 'loginCredentials.server' ) || !store.get( 'loginCredentials.username' ) || !store.get( 'loginCredentials.password' ) ) {
+		
+		log.warn( 'cleanup-empty: no credentials — aborting' )
+		
+		finish({
+			ran: false,
+			deleted: 0,
+			error: i18n.t( 'cleanup:notlogged', 'Not logged in to Nextcloud — log in first and try again.' )
+		})
+		return
+	}
+	
+	//note(dgmid): fresh folder tree straight from the server — the local store may
+	//be stale (another window may have moved things since our last refresh)
+	api( 'folders', '', '' ).then( function() {
+		
+		let folders = store.get( 'folders' ) || []
+		
+		if( !folders.length ) {
+			
+			finish({ ran: false, deleted: 0, error: i18n.t( 'cleanup:nofolders', 'Could not read the folder tree from the server.' ) })
+			return
+		}
+		
+		//note(dgmid): parent → children map (server normalizes root to -1)
+		let byParent = new Map()
+		
+		for( let f of folders ) {
+			
+			let p = isRootParent( f.parent_folder ) ? -1 : f.parent_folder
+			
+			if( !byParent.has( p ) ) byParent.set( p, [] )
+			byParent.get( p ).push( f )
+		}
+		
+		//note(dgmid): a protected folder must survive, and so must its whole ancestor
+		//chain: the deepest-first sweep also deletes parents that only held empty folders,
+		//and a parent deleted while the protected folder sits inside it would take it down
+		//too. Home is never a candidate in the first place.
+		let keepIds = new Set()
+		
+		for( let id of keepRequested ) keepIds.add( id )
+		
+		for( let id of Array.from( keepRequested ) ) {
+			
+			let cur 	= id,
+				seen = new Set()
+			
+			while( cur != null && cur !== -1 && !seen.has( cur ) ) {
+				
+				seen.add( cur )
+				
+				let f = folders.find( x => x.id === cur )
+				
+				if( !f ) break
+				
+				let p = isRootParent( f.parent_folder ) ? -1 : f.parent_folder
+				
+				if( p !== -1 ) keepIds.add( p )
+				
+				cur = p
+			}
+		}
+		
+		api( 'all', '', '' ).then( function( array ) {
+			
+			if( !Array.isArray( array ) ) {
+				
+				log.warn( 'cleanup-empty: could not read bookmarks — aborting' )
+				
+				finish({ ran: false, deleted: 0, error: i18n.t( 'cleanup:nobookmarks', 'Could not read the bookmarks from the server.' ) })
+				return
+			}
+			
+			//note(dgmid): real bookmark counts per folder id (server truth)
+			let counts = new Map()
+			
+			for( let b of array ) {
+				
+				for( let fid of ( b.folders || [] ) ) {
+					
+					if( fid !== -1 && fid != null ) counts.set( fid, ( counts.get( fid ) || 0 ) + 1 )
+				}
+			}
+			
+			function hasBookmarkDescendant( id ) {
+				
+				for( let c of ( byParent.get( id ) || [] ) ) {
+					
+					if( ( counts.get( c.id ) || 0 ) > 0 ) return true
+					if( hasBookmarkDescendant( c.id ) ) return true
+				}
+				
+				return false
+			}
+			
+			//note(dgmid): candidates — every folder whose entire subtree holds zero
+			//bookmarks, at any depth. Nested empty folders are ALL candidates, and
+			//deleting deepest-first removes each empty leaf, then the parent that
+			//just became empty, and so on up the chain — so a folder that only
+			//contained empty folders dies whole. Home is never a candidate.
+			let deletable = folders.filter( f => {
+				
+				if( f.id === -1 ) return false
+				
+				if( keepIds.has( f.id ) ) return false
+				
+				if( ( counts.get( f.id ) || 0 ) > 0 ) return false
+				
+				return !hasBookmarkDescendant( f.id )
+			})
+			
+			if( !deletable.length ) {
+				
+				log.info( 'cleanup-empty: nothing to delete — tree is clean' )
+				
+				finish({ ran: true, deleted: 0 })
+				return
+			}
+			
+			//note(dgmid): deepest-first ordering — children before parents, so each
+			//DELETE reaches the server while its folder is genuinely empty
+			let depth = new Map()
+			
+			function setDepth( id, d ) {
+				
+				depth.set( id, d )
+				
+				for( let c of ( byParent.get( id ) || [] ) ) setDepth( c.id, d + 1 )
+			}
+			
+			for( let root of ( byParent.get( -1 ) || [] ) ) setDepth( root.id, 1 )
+			
+			deletable.sort( ( a, b ) => ( depth.get( b.id ) || 0 ) - ( depth.get( a.id ) || 0 ) )
+			
+			let names = deletable.slice( 0, 30 ).map( f => '• ' + f.text ).join( '\n' )
+			
+			if( deletable.length > 30 ) names += '\n…'
+			
+			let response = ipcRenderer.sendSync( 'show-message-box', {
+				
+				message: i18n.t( 'cleanup:dialog.message', 'Found {{count}} empty folder(s). Delete them?', { count: deletable.length } ),
+				detail: names + '\n\n' + i18n.t( 'cleanup:dialog.note', 'Note: any empty subfolders nested inside these will also be removed.' ),
+				buttons: [
+					i18n.t( 'cleanup:dialog.confirm', 'Delete Empty Folders' ),
+					i18n.t( 'cleanup:dialog.cancel', 'Cancel' )
+				]
+			})
+			
+			if( response !== 0 ) {
+				
+				finish({ ran: true, deleted: 0 })
+				return
+			}
+			
+			let deleted = 0,
+				ci		= 0
+			
+			function deleteNext() {
+				
+				if( ci >= deletable.length ) {
+					
+					log.info( `cleanup-empty: deleted ${deleted} of ${deletable.length} empty folder(s)` )
+					
+					finish({ ran: true, deleted: deleted })
+					return
+				}
+				
+				let f = deletable[ ci ]
+				
+				//note(dgmid): sequential deletes, deepest-first — a parent only dies
+				//after all its (now-empty) children are gone
+				api( 'deletefolder', f.id, '' ).then( function( res ) {
+					
+					if( res !== null ) deleted++
+					
+					ci++
+					setTimeout( deleteNext, 150 )
+				})
+			}
+			
+			deleteNext()
+		})
+	})
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="">
+	<head>
+		<meta charset="utf-8" />
+		<title>Nextcloud Bookmark Manager - Clean Up Empty Folders</title>
+		<script>
+			require( '../js/theme.min' )
+		</script>
+		<link rel="stylesheet" type="text/css" href="../css/modal.min.css" media="all">
+		<style>
+			body { background-color: #ececec; }
+			[data-theme^="dark"] body { background-color: #323232; }
+			#status { text-align: center; padding: 24px 16px 8px; font-size: 13px; color: var(--text); }
+			#hint { text-align: center; padding: 0 16px; font-size: 12px; color: var(--text-light); line-height: 1.5; }
+			#progress-bar { width: 0%; height: 4px; background: var(--accent); transition: width .3s; border-radius: 2px; margin: 14px auto; max-width: 280px; }
+			footer { position: fixed; bottom: 0; left: 0; right: 0; background: var(--menu); padding: 8px 16px; text-align: right; border-top: 1px solid var(--table-border); }
+			#btn-start { float: left; }
+		</style>
+	</head>
+	
+	<body>
+		<header data-i18n="cleanup:header">Clean Up Empty Folders</header>
+		
+		<div class="scroll">
+			<div id="status"></div>
+			<div id="progress-bar"></div>
+			<div id="hint" data-i18n="cleanup:hint">Finds folders that hold no bookmarks (including empty subfolders) and deletes them after confirmation.</div>
+		</div>
+		
+		<footer id="footer">
+			<button id="btn-start" class="ui-button" type="button" data-i18n="cleanup:button.start">Scan Now</button>
+			<button id="btn-close" class="ui-button" type="button" data-i18n="cleanup:button.close">Close</button>
+		</footer>
+		
+		<script>
+			require( '../js/modal-cleanup-empty.min' )
+		</script>
+	</body>
+</html>

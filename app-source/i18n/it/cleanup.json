@@ -1,0 +1,24 @@
+{
+  "header": "Pulisci cartelle vuote",
+  "hint": "Trova le cartelle che non contengono alcun segnalibro (incluse le sottocartelle vuote) e le elimina dopo la conferma.",
+  "button": {
+    "start": "Cerca ora",
+    "close": "Chiudi"
+  },
+  "progress": {
+    "scanning": "Ricerca delle cartelle vuote…"
+  },
+  "done": {
+    "removed": "Fatto! Eliminate {{count}} cartella/e vuota/e.",
+    "none": "Nessuna cartella vuota trovata."
+  },
+  "notlogged": "Nessuna sessione attiva su Nextcloud — accedi e riprova.",
+  "nofolders": "Impossibile leggere l'albero delle cartelle dal server.",
+  "nobookmarks": "Impossibile leggere i segnalibri dal server.",
+  "dialog": {
+    "message": "Trovate {{count}} cartella/e vuota/e. Eliminarle?",
+    "note": "Nota: verranno eliminate anche le sottocartelle vuote in esse contenute.",
+    "confirm": "Elimina cartelle vuote",
+    "cancel": "Annulla"
+  }
+}

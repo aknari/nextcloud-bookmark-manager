@@ -24,7 +24,8 @@
     "autoorg": "Auto-Organizar Marcadores…",
     "learn": "Aprender estructura de carpetas…",
     "repairtitles": "Reparar Títulos…",
-    "exportaz": "Exportar archivo de marcadores (A–Z)…"
+    "exportaz": "Exportar archivo de marcadores (A–Z)…",
+    "cleanupempty": "Limpiar carpetas vacías…"
   },
   "edit": {
     "edit": "Editar",

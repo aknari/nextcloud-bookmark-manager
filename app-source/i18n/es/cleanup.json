@@ -1,0 +1,24 @@
+{
+  "header": "Limpiar carpetas vacías",
+  "hint": "Busca carpetas que no contienen ningún marcador (incluidas las subcarpetas vacías) y las elimina tras confirmarlo.",
+  "button": {
+    "start": "Buscar ahora",
+    "close": "Cerrar"
+  },
+  "progress": {
+    "scanning": "Buscando carpetas vacías…"
+  },
+  "done": {
+    "removed": "¡Hecho! Se han eliminado {{count}} carpeta(s) vacía(s).",
+    "none": "No se han encontrado carpetas vacías."
+  },
+  "notlogged": "Sin sesión iniciada en Nextcloud — inicia sesión y vuelve a intentarlo.",
+  "nofolders": "No se pudo leer el árbol de carpetas del servidor.",
+  "nobookmarks": "No se pudieron leer los marcadores del servidor.",
+  "dialog": {
+    "message": "Se han encontrado {{count}} carpeta(s) vacía(s). ¿Eliminarlas?",
+    "note": "Nota: también se eliminarán las subcarpetas vacías anidadas dentro de ellas.",
+    "confirm": "Eliminar carpetas vacías",
+    "cancel": "Cancelar"
+  }
+}

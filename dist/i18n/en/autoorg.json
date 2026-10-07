@@ -20,6 +20,7 @@
     "same": "Same as source (current folder)",
     "reusedest": "Use the destination's existing structure as a guide",
     "deleteempty": "Delete empty folders left behind after organizing",
+    "deletesource": "Also delete the source folder if it ends up empty",
     "consider_existing": "Consider existing folders (reuse what's already there)",
     "others": "Others"
   },
@@ -27,6 +28,7 @@
     "profile": "Optional: apply a learned organizational philosophy",
     "reusedest": "Only applies when the destination is different from the source folder",
     "consider_existing": "When off, the previous folder structure is discarded and the AI reorganizes from scratch using only the selected profile",
+    "deletesource": "Unchecked (default): the folder you started from is kept, so you can keep dropping new bookmarks into it",
     "maxfolder": "Soft limit: folders above ~this many items (bookmarks + subfolders) are split into balanced subfolders; groups near the limit stay together and single-item folders are merged.",
     "minfolder": "New folders created by this run with fewer than this many bookmarks are merged into the closest sibling folder (or moved one level up). Prevents folders with a single bookmark. Existing folders are respected."
   },

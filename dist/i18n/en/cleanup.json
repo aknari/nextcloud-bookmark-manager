@@ -1,0 +1,24 @@
+{
+  "header": "Clean Up Empty Folders",
+  "hint": "Finds folders that hold no bookmarks (including empty subfolders) and deletes them after confirmation.",
+  "button": {
+    "start": "Scan Now",
+    "close": "Close"
+  },
+  "progress": {
+    "scanning": "Scanning for empty folders…"
+  },
+  "done": {
+    "removed": "Done! {{count}} empty folder(s) deleted.",
+    "none": "No empty folders were found."
+  },
+  "notlogged": "Not logged in to Nextcloud — log in first and try again.",
+  "nofolders": "Could not read the folder tree from the server.",
+  "nobookmarks": "Could not read the bookmarks from the server.",
+  "dialog": {
+    "message": "Found {{count}} empty folder(s). Delete them?",
+    "note": "Note: any empty subfolders nested inside these will also be removed.",
+    "confirm": "Delete Empty Folders",
+    "cancel": "Cancel"
+  }
+}

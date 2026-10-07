@@ -20,6 +20,7 @@
     "same": "Igual que el origen (carpeta actual)",
     "reusedest": "Usar la estructura existente del destino como guía",
     "deleteempty": "Eliminar las carpetas vacías que queden tras organizar",
+    "deletesource": "Eliminar también la carpeta de origen si queda vacía",
     "consider_existing": "Considerar las carpetas existentes (reutilizar lo que ya hay)",
     "others": "Otros"
   },
@@ -27,6 +28,7 @@
     "profile": "Opcional: aplicar una filosofía organizativa aprendida",
     "reusedest": "Solo se aplica cuando el destino es distinto de la carpeta de origen",
     "consider_existing": "Si se desactiva, se descarta la estructura de carpetas anterior y la IA reorganiza desde cero usando solo el perfil seleccionado",
+    "deletesource": "Sin marcar (predeterminado): la carpeta desde la que partes se conserva, para que puedas seguir dejando ahí los marcadores nuevos",
     "maxfolder": "Límite blando: las carpetas que superen aproximadamente este número de elementos (marcadores + subcarpetas) se dividen en subcarpetas equilibradas; los grupos cercanos al límite se mantienen y las carpetas de un solo elemento se fusionan.",
     "minfolder": "Las carpetas nuevas creadas por esta ejecución con menos marcadores que este número se fusionan con la carpeta hermana más cercana (o suben un nivel). Evita carpetas con un único marcador. Las carpetas existentes se respetan."
   },

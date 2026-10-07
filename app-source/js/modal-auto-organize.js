@@ -23,6 +23,16 @@ const $ = require( 'jquery' )
 const jqueryI18next = require( 'jquery-i18next' )
 const log = require( 'electron-log' )
 const fetchApi = require( './fetch.min' )
+
+//note(dgmid): the dedicated "Clean Up Empty Folders" module (menu Marcadores) knows
+//how to scan the whole tree from /folder only (no full bookmark download), confirm
+//with the user and delete bottom-up. When it is available the auto-organize cleanup
+//reuses it FIRST and only falls back to the heavy in-modal sweep when it can't run
+//(older build) or when the destination folder is empty of bookmarks (its "parents of
+//empty folders" rule would refuse to sweep inside it).
+let cleanupEmptyModule = null
+try { cleanupEmptyModule = require( './cleanup-empty.min' ) } catch( e ) { cleanupEmptyModule = null }
+
 const serialize = require( './serialize.min' )
 const defaultProfile = require( './ai-default-profile.min' )
 const aiClient = require( './ai-client.min' )
@@ -206,6 +216,15 @@ function loadConfig() {
 	
 	context = store.get( '_autoOrganizeContext' )
 	
+	//note(dgmid): the window can also be opened straight from the menu without going
+	//through the main window (no context persisted). The AI run needs a context, but
+	//"Delete Empty Folders…" only needs the folder tree — so degrade gracefully
+	//instead of dying on `context.folderId`.
+	if( !context || typeof context !== 'object' ) {
+		
+		context = { folderId: -1, folderName: i18n.t('autoorg:label.home', 'Home'), bookmarks: [] }
+	}
+	
 	let problem = aiClient.configProblem( aiClient.normalizeConfig( config ) )
 	
 	if( problem ) {
@@ -223,8 +242,9 @@ function loadConfig() {
 	let folderName 	= ( context && context.folderName ) ? context.folderName : i18n.t('autoorg:label.home', 'Home')
 	
 	$('#cfg-folder').text( folderName )
-	
+
 	//note(dgmid): restore the persisted "max items per folder" value across sessions
+
 	$('#max-per-folder').val( store.get( 'aiMaxPerFolder' ) || '' )
 	
 	refreshCount()
@@ -512,6 +532,20 @@ $('#chk-consider-existing').prop( 'checked', store.get( 'aiConsiderExisting' ) !
 $('#chk-consider-existing').on( 'change', function() {
 	
 	store.set( 'aiConsiderExisting', $(this).is( ':checked' ) )
+})
+
+
+
+//note(dgmid): should the empty-folder sweep also remove the SOURCE folder when this run
+//emptied it? Off by default: the source folder is normally kept — it is the inbox where
+//new bookmarks are dropped, and it is also a valid target for the classifier. Persisted
+//like the other checkboxes so the choice carries across runs.
+
+$('#chk-delete-source').prop( 'checked', store.get( 'aiDeleteSourceIfEmpty' ) === true )
+
+$('#chk-delete-source').on( 'change', function() {
+	
+	store.set( 'aiDeleteSourceIfEmpty', $(this).is( ':checked' ) )
 })
 
 
@@ -3411,9 +3445,75 @@ $('#btn-accept-all').click( function() {
 	//on the server AND it lies inside the area this run touched: the source subtree, the
 	//destination subtree, or anywhere at all when the source was Home/All bookmarks.
 	//Folders that held moved bookmarks are eligible wherever they are. Home and the
-	//destination folder are never touched. Requires explicit confirmation.
+	//destination folder are never touched. The SOURCE folder is protected too unless the
+	//"delete the source folder too" checkbox is on. Requires explicit confirmation.
+	
+	//note(dgmid): ids the empty-folder sweep must never delete — the destination always,
+	//and the source folder unless the user explicitly opted in (it is normally kept as an
+	//inbox for new bookmarks). Callers protect the ancestors as well: deleting a parent
+	//would take the protected folder down with it.
+	
+	function protectedFolderIds() {
+		
+		let ids 		= [],
+			destId 	= getDestId(),
+			sourceId = ( context && context.folderId != null ) ? context.folderId : -1
+		
+		if( destId !== -1 ) ids.push( destId )
+		
+		if( sourceId !== -1 && sourceId !== destId && !$( '#chk-delete-source' ).is( ':checked' ) ) ids.push( sourceId )
+		
+		return ids
+	}
 	
 	function deleteEmptyFolders( applyList, callback, standalone ) {
+		
+		//note(dgmid): fast path — delegate to the cleanup-empty module. It only fetches
+		//the folder tree (one GET) and, when the tree is already clean, returns without
+		//touching the server, so the normal "nothing to clean" path gets much cheaper
+		//than the old full-bookmark-catalogue download. The module refuses to run when
+		//the destination folder holds zero bookmarks (its sweep is driven by parents of
+		//empty folders) — in that rare case we fall back to the original sweep below,
+		//which understands the destination subtree directly.
+		if( cleanupEmptyModule && typeof cleanupEmptyModule.cleanupEmptyFolders === 'function' ) {
+			
+			//note(dgmid): the source folder is normally kept — the user keeps dropping new
+			//bookmarks into it — so only an explicit opt-in lets the sweep delete it
+			cleanupEmptyModule.cleanupEmptyFolders( { keepIds: protectedFolderIds() }, function( result ) {
+				
+				if( result && result.ran ) {
+					
+					log.info( `[auto-organize] cleanup (module) → deleted=${result.deleted || 0}` )
+					
+					if( result.deleted > 0 ) {
+						
+						//note(dgmid): the module edits its own local copy of the tree —
+						//our store still lists the deleted folders until it refetches
+						fetchApi.bookmarksApi( 'folders', '', '', function() {
+							
+							callback( { deleted: result.deleted } )
+						})
+						
+					} else {
+						
+						callback( { deleted: 0 } )
+					}
+					
+					return
+				}
+				
+				//note(dgmid): module could not run (no credentials, offline, or empty
+				//destination) — fall through to the full in-modal sweep
+				deleteEmptyFoldersFull( applyList, callback, standalone )
+			})
+			
+			return
+		}
+		
+		deleteEmptyFoldersFull( applyList, callback, standalone )
+	}
+	
+	function deleteEmptyFoldersFull( applyList, callback, standalone ) {
 		
 		//note(dgmid): every folder that held at least one moved bookmark before the run
 		let affected = new Set()
@@ -3512,10 +3612,23 @@ $('#btn-accept-all').click( function() {
 				//this run's area (or held moved bookmarks, or the whole tree was in scope).
 				//Folders whose subtree never held bookmarks are never proposed, even during
 				//a whole-tree sweep.
+				//note(dgmid): the destination is always protected, and so is the source folder
+				//unless the user opted in to deleting it. A protected folder's ancestors are
+				//protected too — a parent deleted with the protected folder still inside it
+				//would take it down with it.
+				let protectedIds = protectedFolderIds()
+				
+				let protectedAncestorOf = function( id ) {
+					
+					return protectedIds.some( pid => isFolderAncestor( folders, id, pid ) )
+				}
+				
 				let deletable = folders.filter( f => {
 					
 					if( f.id === -1 || f.id === destId ) return false
 					if( isFolderAncestor( folders, f.id, destId ) ) return false
+					if( protectedIds.indexOf( f.id ) !== -1 ) return false
+					if( protectedAncestorOf( f.id ) ) return false
 					if( ( counts.get( f.id ) || 0 ) > 0 ) return false
 					if( hasBookmarkDescendant( f.id ) ) return false
 					
@@ -3611,6 +3724,20 @@ function getWithdrawalList() {
 	let destIds = new Set( getDescendantIds( store.get( 'folders' ) || [], destId ) )
 	destIds.add( destId )
 	
+	//note(dgmid): staging-folder run — the destination is an ANCESTOR of the source (e.g.
+	//source "periódicos"/"new", destination its parent "mylinks"). The source subtree then
+	//lives INSIDE the destination, so the "living inside the destination" test above would
+	//swallow EVERY bookmark of the source and nothing would ever be classified. In that
+	//case the source subtree is excluded: only a membership OUTSIDE it (but inside the
+	//destination) means the bookmark is genuinely already organized elsewhere.
+	let sourceIds = null
+	
+	if( isFolderAncestor( store.get( 'folders' ) || [], destId, sourceId ) ) {
+		
+		sourceIds = new Set( getDescendantIds( store.get( 'folders' ) || [], sourceId ) )
+		sourceIds.add( sourceId )
+	}
+	
 	//note(dgmid): bookmarks already being REASSIGNED by this run are handled by their
 	//own PUT (which replaces the whole folder list) — never double-handle them here.
 	//Only moves WITH a destination count: buildMoves also emits empty stubs for
@@ -3621,7 +3748,7 @@ function getWithdrawalList() {
 	return allBookmarks.filter( b =>
 		!beingMoved.has( b.id ) &&
 		( b.folders || [] ).includes( sourceId ) &&
-		( b.folders || [] ).some( f => destIds.has( f ) )
+		( b.folders || [] ).some( f => destIds.has( f ) && ( sourceIds === null || !sourceIds.has( f ) ) )
 	)
 }
 
@@ -4064,58 +4191,6 @@ $('#max-per-folder').on( 'change', function() {
 $('#btn-start').click( function() {
 	
 	processBookmarks()
-})
-
-
-
-//note(dgmid): standalone cleanup — scan the current scope for folders left empty by
-//EARLIER runs (e.g. an interrupted cleanup) and offer to delete them. No AI needed:
-//it runs the same deleteEmptyFolders sweep with an empty move list, so the whole
-//folder subtree of the current context becomes the candidate area.
-
-$('#btn-clean-empty').click( function() {
-	
-	if( processing || applying ) return
-	
-	//note(dgmid): a cancelled run leaves `cancelled` true — reset it or the delete
-	//loop would abort immediately after the confirm dialog and delete nothing
-	cancelled = false
-	
-	if( !context || !context.folderId ) {
-		
-		ipcRenderer.send('show-error-box', {
-			title: i18n.t('autoorg:error.nocontext_title', 'No Folder Selected'),
-			content: i18n.t('autoorg:error.nocontext_content', 'Open this window from a folder in the main window first.')
-		})
-		return
-	}
-	
-	$('#btn-clean-empty').prop('disabled', true)
-	
-	$('#step-start').hide()
-	$('#step-progress').show()
-	
-	setProgress( 0, 1, i18n.t('autoorg:progress.scanning', 'Scanning for empty folders…') )
-	
-	deleteEmptyFolders( [], function( info ) {
-		
-		$('#btn-clean-empty').prop('disabled', false)
-		
-		$('#step-progress').hide()
-		$('#step-start').show()
-		
-		let msg = ( info && info.deleted > 0 )
-			? i18n.t('autoorg:done.emptied', '{{deleted}} empty folders removed.', { deleted: info.deleted })
-			: i18n.t('autoorg:done.noempty', 'No empty folders were found in this scope.')
-		
-		ipcRenderer.send('show-error-box', {
-			title: i18n.t('autoorg:done.title_clean', 'Clean Up Empty Folders'),
-			content: msg
-		})
-		
-		//note(dgmid): refresh bookmarks — send to 'refresh' channel (main.js forwards to main window)
-		ipcRenderer.send( 'refresh', 'refresh-bookmarks' )
-	}, true )
 })
 
 
