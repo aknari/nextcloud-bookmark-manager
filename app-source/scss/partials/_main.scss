@@ -422,7 +422,11 @@ aside {
 		
 		margin-bottom: 10px;
 		
-		.sidebar-scroll { top: 66px; }
+		//note(dgmid): 66px covered the title, "New Folder…" and "Home"; the folder
+		//search box above them is 30px tall, so the scroll area has to start below it
+		//or the first row of the tree is drawn on top of those two rows (measured:
+		//30px of overlap before this fix)
+		.sidebar-scroll { top: 96px; }
 	}
 	
 	#sidebar-tags {
