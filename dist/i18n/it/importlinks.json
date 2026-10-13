@@ -7,6 +7,7 @@
   },
   "select": {
     "placeholder": "Cerca una cartella…",
+    "choose": "Scegli una cartella…",
     "noresults": "Nessuna cartella corrisponde."
   },
   "hint": {
@@ -24,6 +25,7 @@
     "choose": "Scegli cartella…",
     "save": "Salva",
     "save_count": "Salva {{count}} segnalibro",
+    "save_count_into": "Salva {{count}} segnalibro in «{{folder}}»",
     "close": "Chiudi",
     "cancel": "Annulla",
     "all": "Tutti",
@@ -38,7 +40,9 @@
   },
   "done": {
     "saved": "Importati {{count}} segnalibro.",
-    "partial": "Importati {{ok}} segnalibro; {{failed}} non riusciti.",
-    "none_selected": "Nessun link selezionato."
+    "saved_into": "Importati {{count}} segnalibro in «{{folder}}».",
+    "partial": "Importati {{ok}} segnalibro in «{{folder}}»; {{failed}} non riusciti.",
+    "none_selected": "Nessun link selezionato.",
+    "no_folder": "Scegli prima la cartella di destinazione."
   }
 }

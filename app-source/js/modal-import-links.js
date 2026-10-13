@@ -110,6 +110,16 @@ function buildDestinations() {
 	let folders 	= store.get( 'folders' ) || [],
 		$sel 		= $( '#dest-folder' ).empty()
 
+	//note(dgmid): nothing is preselected. The destination used to start at Home, so a
+	//whole batch could be filed there while the user believed it was going to the
+	//folder they had in mind; the save step now waits for an explicit choice.
+
+	$sel.append( $( '<option>', {
+		value: '',
+		text: i18n.t( 'importlinks:select.choose', 'Choose a folder…' ),
+		'data-depth': 0
+	}))
+
 	$sel.append( $( '<option>', {
 		value: '-1',
 		text: i18n.t( 'importlinks:label.home', 'Home' ),
@@ -125,6 +135,52 @@ function buildDestinations() {
 		}))
 	}
 }
+
+//note(dgmid): the destination folder the user actually picked, or null while none
+//has been chosen yet.
+
+function destinationOption() {
+
+	let value = $( '#dest-folder' ).val()
+
+	if( value === null || value === undefined || value === '' ) return null
+
+	let id = parseInt( value, 10 )
+
+	if( isNaN( id ) ) return null
+
+	let $option = $( '#dest-folder option' ).filter( function() {
+
+		return String( $( this ).val() ) === String( value )
+	})
+
+	return { id: id, text: $option.length ? $option.first().text() : String( value ) }
+}
+
+
+
+//note(dgmid): name the destination on the button itself — the folder the bookmarks
+//will land in has to be on screen at the moment Save is clicked.
+
+function refreshSaveLabel( count ) {
+
+	if( count === undefined ) count = $( '#btn-save' ).data( 'count' ) || 0
+
+	$( '#btn-save' ).data( 'count', count )
+
+	let dest = destinationOption()
+
+	if( dest ) {
+
+		$( '#btn-save' ).text( i18n.t( 'importlinks:button.save_count_into', 'Save {{count}} bookmark(s) into “{{folder}}”', { count: count, folder: dest.text } ) )
+
+	} else {
+
+		$( '#btn-save' ).text( i18n.t( 'importlinks:button.save_count', 'Save {{count}} bookmark(s)', { count: count } ) )
+	}
+}
+
+
 
 function initDestinationPicker() {
 
@@ -151,6 +207,9 @@ function initDestinationPicker() {
 			return $( '<span>' ).css( 'padding-left', ( depth * 14 ) + 'px' ).text( data.text )
 		}
 	})
+
+	//note(dgmid): keep the button label in step with the picker
+	$( '#dest-folder' ).on( 'change', function() { refreshSaveLabel() } )
 
 	//note(dgmid): select2 never writes a placeholder into the dropdown's search box,
 	//so it opened as an empty, unlabelled field: nothing to see, nothing to click on.
@@ -285,15 +344,14 @@ function runChoose() {
 
 	initDestinationPicker()
 
-	$( '#dest-folder' ).val( '-1' ).trigger( 'change' )
+	//note(dgmid): the destination the user already chose is kept — going back to the
+	//preview and forward again used to drop it back to Home without a word.
 
 	$('#save-summary').text(
 		i18n.t( 'importlinks:section.links', '{{count}} link(s) found', { count: items.length } )
 	)
 
-	$('#btn-save').text(
-		i18n.t( 'importlinks:button.save_count', 'Save {{count}} bookmark(s)', { count: items.length } )
-	)
+	refreshSaveLabel( items.length )
 }
 
 
@@ -314,9 +372,20 @@ function runSave() {
 		return
 	}
 
-	let destId = parseInt( $( '#dest-folder' ).val(), 10 )
+	let dest = destinationOption()
 
-	if( isNaN( destId ) ) destId = -1
+	//note(dgmid): no destination, no save. Quietly falling back to Home here is how a
+	//batch of 50 ended up unfiled while the modal reported success.
+
+	if( !dest ) {
+
+		$('#status').text( i18n.t( 'importlinks:done.no_folder', 'Pick the destination folder first.' ) )
+		$( '#dest-folder' ).select2( 'open' )
+
+		return
+	}
+
+	let destId = dest.id
 
 	saving = true
 
@@ -379,8 +448,8 @@ function runSave() {
 
 		$('#save-summary').text(
 			failed > 0
-				? i18n.t( 'importlinks:done.partial', 'Imported {{ok}} bookmark(s); {{failed}} failed.', { ok: ok, failed: failed } )
-				: i18n.t( 'importlinks:done.saved', 'Imported {{count}} bookmark(s).', { count: ok } )
+				? i18n.t( 'importlinks:done.partial', 'Imported {{ok}} bookmark(s) into “{{folder}}”; {{failed}} failed.', { ok: ok, failed: failed, folder: dest.text } )
+				: i18n.t( 'importlinks:done.saved_into', 'Imported {{count}} bookmark(s) into “{{folder}}”.', { count: ok, folder: dest.text } )
 		)
 
 		setStep( 'done' )

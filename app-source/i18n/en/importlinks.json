@@ -7,6 +7,7 @@
   },
   "select": {
     "placeholder": "Search a folder…",
+    "choose": "Choose a folder…",
     "noresults": "No folder matches."
   },
   "hint": {
@@ -24,6 +25,7 @@
     "choose": "Choose Folder…",
     "save": "Save",
     "save_count": "Save {{count}} bookmark(s)",
+    "save_count_into": "Save {{count}} bookmark(s) into “{{folder}}”",
     "close": "Close",
     "cancel": "Cancel",
     "all": "Select all",
@@ -38,7 +40,9 @@
   },
   "done": {
     "saved": "Imported {{count}} bookmark(s).",
-    "partial": "Imported {{ok}} bookmark(s); {{failed}} failed.",
-    "none_selected": "No links are selected."
+    "saved_into": "Imported {{count}} bookmark(s) into “{{folder}}”.",
+    "partial": "Imported {{ok}} bookmark(s) into “{{folder}}”; {{failed}} failed.",
+    "none_selected": "No links are selected.",
+    "no_folder": "Pick the destination folder first."
   }
 }

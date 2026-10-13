@@ -7,6 +7,7 @@
   },
   "select": {
     "placeholder": "Buscar una carpeta…",
+    "choose": "Elige una carpeta…",
     "noresults": "Ninguna carpeta coincide."
   },
   "hint": {
@@ -24,6 +25,7 @@
     "choose": "Elegir carpeta…",
     "save": "Guardar",
     "save_count": "Guardar {{count}} marcador(es)",
+    "save_count_into": "Guardar {{count}} marcador(es) en «{{folder}}»",
     "close": "Cerrar",
     "cancel": "Cancelar",
     "all": "Todos",
@@ -38,7 +40,9 @@
   },
   "done": {
     "saved": "Importados {{count}} marcador(es).",
-    "partial": "Importados {{ok}} marcador(es); {{failed}} con error.",
-    "none_selected": "No hay ningún enlace seleccionado."
+    "saved_into": "Importados {{count}} marcador(es) en «{{folder}}».",
+    "partial": "Importados {{ok}} marcador(es) en «{{folder}}»; {{failed}} con error.",
+    "none_selected": "No hay ningún enlace seleccionado.",
+    "no_folder": "Elige primero la carpeta de destino."
   }
 }
