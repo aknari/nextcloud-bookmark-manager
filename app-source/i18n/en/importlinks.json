@@ -6,6 +6,7 @@
     "home": "Home"
   },
   "select": {
+    "placeholder": "Search a folder…",
     "noresults": "No folder matches."
   },
   "hint": {

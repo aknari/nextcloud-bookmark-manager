@@ -6,6 +6,7 @@
     "home": "Inizio"
   },
   "select": {
+    "placeholder": "Cerca una cartella…",
     "noresults": "Nessuna cartella corrisponde."
   },
   "hint": {

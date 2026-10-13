@@ -6,6 +6,7 @@
     "home": "Inicio"
   },
   "select": {
+    "placeholder": "Buscar una carpeta…",
     "noresults": "Ninguna carpeta coincide."
   },
   "hint": {

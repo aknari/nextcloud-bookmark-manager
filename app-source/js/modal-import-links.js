@@ -151,6 +151,17 @@ function initDestinationPicker() {
 			return $( '<span>' ).css( 'padding-left', ( depth * 14 ) + 'px' ).text( data.text )
 		}
 	})
+
+	//note(dgmid): select2 never writes a placeholder into the dropdown's search box,
+	//so it opened as an empty, unlabelled field: nothing to see, nothing to click on.
+	//Label it every time the dropdown opens (the field is created with the dropdown).
+
+	$( '#dest-folder' ).on( 'select2:open', function() {
+
+		let label = i18n.t( 'importlinks:select.placeholder', 'Search a folder…' )
+
+		$( '.select2-dropdown .select2-search__field' ).attr( 'placeholder', label ).attr( 'aria-label', label )
+	})
 }
 
 

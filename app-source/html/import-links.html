@@ -67,20 +67,25 @@
 				height: 28px;
 			}
 			
-			/* The dropdown is anchored to the field (the app's modals pin it at 40px/0)
-			   and made tall enough to browse a long folder list; the search box is the
-			   first thing inside it, so typing filters as soon as it opens. */
-			#dest-block .select2-container--custom .select2-dropdown,
-			#dest-block .select2-container--custom .select2-dropdown--above {
-				left: 16px;
-				right: 16px;
-				margin-left: 0;
+			/* NOTE: select2 re-attaches the dropdown to <body> when it opens, so nothing
+			   inside it can be reached from #dest-block. Scoped that way these rules did
+			   nothing at all, and the app's shared theme (left: 40px plus a margin-left of
+			   80px) pushed the dropdown 104px to the right — 88px of it off a 620px window.
+			   This <style> exists only in this window, so scoping to body is safe; and
+			   select2 sets the width inline (equal to the field's), so only the shift has
+			   to be cancelled. Measured after the fix: dropdown at x=16, right edge 604,
+			   flush under the folder box and inside the window. */
+			body .select2-container--custom .select2-dropdown,
+			body .select2-container--custom .select2-dropdown--above {
+				left: 16px !important;
+				right: auto !important;
+				margin-left: 0 !important;
 			}
-			#dest-block .select2-container--custom .select2-results > .select2-results__options {
+			body .select2-container--custom .select2-results > .select2-results__options {
 				max-height: 260px;
 			}
-			#dest-block .select2-container--custom .select2-search--dropdown { padding: 6px; }
-			#dest-block .select2-container--custom .select2-search--dropdown .select2-search__field {
+			body .select2-container--custom .select2-search--dropdown { padding: 6px; }
+			body .select2-container--custom .select2-search--dropdown .select2-search__field {
 				box-sizing: border-box;
 				width: 100%;
 				height: 26px;
@@ -90,6 +95,10 @@
 				background-color: var(--input-background);
 				border: 1px solid var(--input-border);
 				border-radius: 3px;
+			}
+			body .select2-container--custom .select2-search--dropdown .select2-search__field::placeholder {
+				color: var(--text);
+				opacity: .45;
 			}
 			
 			.summary { font-size: 13px; color: var(--text); margin-bottom: 10px; }
