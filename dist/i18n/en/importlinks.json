@@ -1,0 +1,40 @@
+{
+  "header": "Import Links from Text",
+  "label": {
+    "source": "Paste the text",
+    "dest": "Save into folder",
+    "home": "Home"
+  },
+  "hint": {
+    "input": "Paste an email, a thread, your notes… The links inside are pulled out. Image and media links (X/Twitter, Reddit, thumbnails…) are left out.",
+    "dest": "Pick an existing folder — create a new one from the main window first if you need it.",
+    "images": "These look like image files. Tick the ones you do want to keep."
+  },
+  "section": {
+    "links": "{{count}} link(s) found",
+    "images": "Possible images — not selected ({{count}})"
+  },
+  "button": {
+    "extract": "Extract Links",
+    "back": "Back",
+    "choose": "Choose Folder…",
+    "save": "Save",
+    "save_count": "Save {{count}} bookmark(s)",
+    "close": "Close",
+    "cancel": "Cancel",
+    "all": "Select all",
+    "none": "None"
+  },
+  "note": {
+    "ignored": "{{count}} image/media link(s) ignored (X/Twitter, Reddit, YouTube thumbnails…).",
+    "none": "No links were found in that text."
+  },
+  "progress": {
+    "saving": "Saving {{done}}/{{total}}…"
+  },
+  "done": {
+    "saved": "Imported {{count}} bookmark(s).",
+    "partial": "Imported {{ok}} bookmark(s); {{failed}} failed.",
+    "none_selected": "No links are selected."
+  }
+}

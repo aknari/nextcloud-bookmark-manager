@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="">
+	<head>
+		<meta charset="utf-8" />
+		<title>Nextcloud Bookmark Manager - Import Links from Text</title>
+		<script>
+			require( '../js/theme.min' )
+		</script>
+		<link rel="stylesheet" type="text/css" href="../css/modal.min.css" media="all">
+		<style>
+			/* This window is not a form: the fields are plain blocks, so the
+			   form-specific rules of modal.min.css do not apply to them. */
+			body { background-color: #ececec; }
+			[data-theme^="dark"] body { background-color: #323232; }
+			
+			.scroll { bottom: 50px; padding: 12px 16px 0; }
+			
+			#step-input label,
+			#step-save label {
+				display: block !important;
+				float: none !important;
+				width: auto !important;
+				text-align: left !important;
+				font-size: 12px !important;
+				font-weight: 600;
+				line-height: 1.4 !important;
+				color: var(--text);
+				margin-bottom: 4px;
+			}
+			#step-input label::after,
+			#step-save label::after { content: none !important; }
+			
+			#source {
+				display: block;
+				width: 100%;
+				height: 210px;
+				padding: 8px 10px;
+				box-sizing: border-box;
+				font-size: 12px;
+				line-height: 1.45;
+				resize: none;
+				color: var(--input-color);
+				background-color: var(--input-background);
+				border: 1px solid var(--input-border);
+				border-radius: 4px;
+			}
+			
+			#dest-folder {
+				display: block;
+				width: 100%;
+				padding: 6px 8px;
+				font-size: 12px;
+				background: var(--stripe-even);
+				color: var(--text);
+				border: 1px solid var(--tab-dividers);
+				border-radius: 4px;
+			}
+			
+			.summary { font-size: 13px; color: var(--text); margin-bottom: 10px; }
+			
+			.list-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+			.list-head .section-title { flex: 1; }
+			.section-title { font-size: 12px; font-weight: 600; color: var(--text); }
+			
+			.linkish {
+				font-size: 11px;
+				color: var(--accent);
+				background: none;
+				border: 0;
+				padding: 0;
+				cursor: pointer;
+			}
+			.linkish:hover { text-decoration: underline; }
+			
+			.picklist { list-style: none; margin: 0 0 12px; padding: 0; }
+			.picklist li { padding: 5px 2px; border-bottom: 1px solid var(--tab-dividers); }
+			.picklist label {
+				display: flex !important;
+				float: none !important;
+				width: auto !important;
+				align-items: baseline;
+				gap: 8px;
+				text-align: left !important;
+				font-size: 12px !important;
+				line-height: 1.35 !important;
+				font-weight: 400 !important;
+				cursor: pointer;
+			}
+			.picklist label::after { content: none !important; }
+			.picklist input[type="checkbox"] { flex: none; margin: 0; }
+			.pick-title { font-weight: 600; color: var(--text); }
+			.pick-url { color: var(--text); opacity: .55; font-size: 11px; word-break: break-all; }
+			
+			#images-block { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--table-border); }
+			#ignored-note { margin-bottom: 10px; }
+			
+			footer {
+				position: fixed;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				margin: 0;
+				padding: 8px 14px;
+				background: var(--modal-header);
+				border-top: 1px solid var(--tab-dividers);
+				text-align: left;
+			}
+			#status { flex: 1; font-size: 12px; color: var(--text); opacity: .75; }
+		</style>
+	</head>
+	
+	<body>
+		<header data-i18n="importlinks:header">Import Links from Text</header>
+		
+		<div class="scroll">
+			
+			<!-- Step 1: paste the text -->
+			<div id="step-input">
+				<label for="source" data-i18n="importlinks:label.source">Paste the text</label>
+				<textarea id="source" spellcheck="false" placeholder=" "></textarea>
+				<div class="hint" data-i18n="importlinks:hint.input">Paste an email, a thread, your notes… The links inside are pulled out. Image and media links (X/Twitter, Reddit, thumbnails…) are left out.</div>
+			</div>
+			
+			<!-- Step 2: what was found -->
+			<div id="step-preview" style="display:none;">
+				<div id="preview-summary" class="summary"></div>
+				
+				<div class="list-head">
+					<span id="links-title" class="section-title"></span>
+					<span>
+						<button id="btn-all" class="linkish" type="button" data-i18n="importlinks:button.all">Select all</button>
+						<button id="btn-none" class="linkish" type="button" data-i18n="importlinks:button.none">None</button>
+					</span>
+				</div>
+				<ul id="links-list" class="picklist"></ul>
+				
+				<div id="images-block" style="display:none;">
+					<div class="section-title" id="images-title"></div>
+					<div class="hint" data-i18n="importlinks:hint.images">These look like image files. Tick the ones you do want to keep.</div>
+					<ul id="images-list" class="picklist"></ul>
+				</div>
+				
+				<div id="ignored-note" class="hint"></div>
+			</div>
+			
+			<!-- Step 3: destination folder -->
+			<div id="step-save" style="display:none;">
+				<div id="save-summary" class="summary"></div>
+				<label for="dest-folder" data-i18n="importlinks:label.dest">Save into folder</label>
+				<select id="dest-folder"></select>
+				<div class="hint" data-i18n="importlinks:hint.dest">Pick an existing folder — create a new one from the main window first if you need it.</div>
+			</div>
+			
+		</div>
+		
+		<footer>
+			<span id="status"></span>
+			<button id="btn-back" class="ui-button" type="button" data-i18n="importlinks:button.back" style="display:none;">Back</button>
+			<button id="btn-extract" class="ui-button" type="button" data-i18n="importlinks:button.extract">Extract Links</button>
+			<button id="btn-choose" class="ui-button" type="button" data-i18n="importlinks:button.choose" style="display:none;">Choose Folder…</button>
+			<button id="btn-save" class="ui-button" type="button" data-i18n="importlinks:button.save" style="display:none;">Save</button>
+			<button id="btn-close" class="ui-button" type="button" data-i18n="importlinks:button.close" style="display:none;">Close</button>
+			<button id="btn-cancel" class="ui-button" type="button" data-i18n="importlinks:button.cancel">Cancel</button>
+		</footer>
+		
+		<script>
+			require( '../js/modal-import-links.min' )
+		</script>
+	</body>
+</html>

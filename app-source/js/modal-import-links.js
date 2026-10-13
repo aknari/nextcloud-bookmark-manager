@@ -1,0 +1,404 @@
+'use strict'
+
+const i18n = require( './i18n.min' )
+
+// Polyfill: make electron-store work in renderer
+try {
+	const electron = require( 'electron' )
+	const remote = require( '@electron/remote' )
+	if( !electron.app ) electron.app = remote.app
+} catch( e ) {}
+
+const { ipcRenderer } = require( 'electron' )
+const $ = require( 'jquery' )
+const jqueryI18next = require( 'jquery-i18next' )
+
+const Store = require( 'electron-store' )
+
+let store
+try {
+	store = new Store()
+} catch( e ) {
+	store = { get: () => null, set: () => {} }
+}
+
+jqueryI18next.init( i18n, $ )
+
+const fetchApi 		= require( './fetch.min' )
+const serialize 	= require( './serialize.min' )
+const extractor 	= require( './link-extract.min' )
+
+
+
+//note(dgmid): log exceptions
+
+window.onerror = function( error, url, line ) {
+
+	ipcRenderer.send( 'error-in-render', {error, url, line} )
+}
+
+
+
+//note(dgmid): set lang & localize strings
+
+$('html').attr('lang', i18n.language)
+$('[data-i18n]').localize()
+
+
+
+//note(dgmid): close modal
+
+function closeModal() {
+
+	ipcRenderer.send( 'close-current-window' )
+}
+
+
+
+//note(dgmid): the three steps of the window — paste, review, choose the folder
+
+let step 		= 'input',
+	extracted 	= { links: [], images: [], ignored: [], found: 0 },
+	saving 		= false
+
+function setStep( next ) {
+
+	step = next
+
+	$('#step-input, #step-preview, #step-save').hide()
+	$('#step-' + next).show()
+
+	$('#btn-extract, #btn-choose, #btn-save, #btn-back, #btn-close').hide()
+
+	if( next === 'input' ) {
+
+		$('#btn-extract').show()
+
+	} else if( next === 'preview' ) {
+
+		$('#btn-back, #btn-choose').show()
+
+	} else if( next === 'save' ) {
+
+		$('#btn-back, #btn-save').show()
+
+	} else if( next === 'done' ) {
+
+		$('#btn-close').show()
+	}
+}
+
+
+
+//note(dgmid): destination folders — same flat tree the rest of the app keeps in
+//the store, indented one full-width space per level (as auto-organize does)
+
+function populateDestinations() {
+
+	let folders 	= store.get( 'folders' ) || [],
+		$sel 		= $( '#dest-folder' ).empty(),
+		childrenOf 	= {}
+
+	for( let f of folders ) {
+
+		let p = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
+
+		if( !childrenOf[p] ) childrenOf[p] = []
+
+		childrenOf[p].push( f )
+	}
+
+	for( let k in childrenOf ) {
+
+		childrenOf[k].sort( (a,b) => (a.text > b.text) ? 1 : ((b.text > a.text) ? -1 : 0) )
+	}
+
+	$sel.append( $( '<option>', {
+		value: '-1',
+		text: i18n.t( 'importlinks:label.home', 'Home' )
+	}))
+
+	function walk( pid, depth ) {
+
+		for( let c of ( childrenOf[pid] || [] ) ) {
+
+			$sel.append( $( '<option>', {
+				value: c.id,
+				text: '　'.repeat( depth ) + c.text
+			}))
+
+			walk( c.id, depth + 1 )
+		}
+	}
+
+	walk( -1, 0 )
+}
+
+
+
+//note(dgmid): one row per link — built with jQuery (never with HTML strings) so a
+//title coming from the pasted text can never break the markup
+
+function renderList( $ul, items, checked ) {
+
+	$ul.empty()
+
+	for( let item of items ) {
+
+		let $box = $( '<input>', { type: 'checkbox' } )
+
+		$box.prop( 'checked', checked )
+		$box.data( 'item', item )
+
+		let $label = $( '<label>' ).append(
+			$box,
+			$( '<span>', { 'class': 'pick-title', text: item.title } ),
+			$( '<span>', { 'class': 'pick-url', text: item.url } )
+		)
+
+		$ul.append( $( '<li>' ).append( $label ) )
+	}
+}
+
+function selectedItems() {
+
+	let items = []
+
+	$('#links-list input[type="checkbox"], #images-list input[type="checkbox"]').each( function() {
+
+		if( !this.checked ) return
+
+		let item = $( this ).data( 'item' )
+
+		if( item ) items.push( item )
+	})
+
+	return items
+}
+
+
+
+//note(dgmid): extract → preview. Nothing is sent anywhere at this point.
+
+function runExtract() {
+
+	extracted = extractor.extractLinks( $( '#source' ).val() )
+
+	let total = extracted.links.length
+
+	if( !total && !extracted.images.length ) {
+
+		$('#status').text( i18n.t( 'importlinks:note.none', 'No links were found in that text.' ) )
+		return
+	}
+
+	$('#status').text( '' )
+
+	renderList( $( '#links-list' ), extracted.links, true )
+
+	$('#links-title').text(
+		i18n.t( 'importlinks:section.links', '{{count}} link(s) found', { count: extracted.links.length } )
+	)
+
+	if( extracted.images.length ) {
+
+		renderList( $( '#images-list' ), extracted.images, false )
+
+		$('#images-title').text(
+			i18n.t( 'importlinks:section.images', 'Possible images — not selected ({{count}})', { count: extracted.images.length } )
+		)
+
+		$('#images-block').show()
+
+	} else {
+
+		$('#images-block').hide()
+	}
+
+	if( extracted.ignored.length ) {
+
+		$('#ignored-note').text(
+			i18n.t( 'importlinks:note.ignored', '{{count}} image/media link(s) ignored (X/Twitter, Reddit, YouTube thumbnails…).', { count: extracted.ignored.length } )
+		)
+
+	} else {
+
+		$('#ignored-note').text( '' )
+	}
+
+	$('#preview-summary').text(
+		i18n.t( 'importlinks:section.links', '{{count}} link(s) found', { count: extracted.links.length } )
+	)
+
+	setStep( 'preview' )
+}
+
+
+
+//note(dgmid): preview → destination
+
+function runChoose() {
+
+	let items = selectedItems()
+
+	if( !items.length ) {
+
+		$('#status').text( i18n.t( 'importlinks:done.none_selected', 'No links are selected.' ) )
+		return
+	}
+
+	$('#status').text( '' )
+
+	populateDestinations()
+
+	$('#save-summary').text(
+		i18n.t( 'importlinks:section.links', '{{count}} link(s) found', { count: items.length } )
+	)
+
+	$('#btn-save').text(
+		i18n.t( 'importlinks:button.save_count', 'Save {{count}} bookmark(s)', { count: items.length } )
+	)
+
+	setStep( 'save' )
+}
+
+
+
+//note(dgmid): save — one 'add' call per bookmark, sequentially, so a large paste
+//does not open a window full of parallel requests. Same API call and favicon
+//hand-off the single "Add Bookmark" modal and the file import already use.
+
+function runSave() {
+
+	if( saving ) return
+
+	let items = selectedItems()
+
+	if( !items.length ) {
+
+		$('#status').text( i18n.t( 'importlinks:done.none_selected', 'No links are selected.' ) )
+		return
+	}
+
+	let destId = parseInt( $( '#dest-folder' ).val(), 10 )
+
+	if( isNaN( destId ) ) destId = -1
+
+	saving = true
+
+	$('#btn-save, #btn-back').prop( 'disabled', true )
+
+	let index 	= 0,
+		ok 		= 0,
+		failed 	= 0
+
+	function next() {
+
+		if( index >= items.length ) {
+
+			finish()
+			return
+		}
+
+		let item = items[index]
+
+		$('#status').text(
+			i18n.t( 'importlinks:progress.saving', 'Saving {{done}}/{{total}}…', { done: index + 1, total: items.length } )
+		)
+
+		let data = serialize.serialize({ url: item.url, title: item.title }) + '&folders[]=' + destId
+
+		fetchApi.bookmarksApi( 'add', '', data, function( message ) {
+
+			if( message ) {
+
+				ok++
+
+				try {
+
+					let returned = JSON.parse( message )
+					ipcRenderer.send( 'update-favicon', returned['item'] )
+
+				} catch( e ) {}
+
+			} else {
+
+				failed++
+			}
+
+			index++
+
+			setTimeout( next, 120 )
+		})
+	}
+
+	function finish() {
+
+		saving = false
+
+		$('#btn-save, #btn-back').prop( 'disabled', false )
+
+		$('#status').text( '' )
+
+		//note(dgmid): the bookmarks are on the server now — refresh the main window
+		ipcRenderer.send( 'refresh', 'refresh' )
+
+		$('#save-summary').text(
+			failed > 0
+				? i18n.t( 'importlinks:done.partial', 'Imported {{ok}} bookmark(s); {{failed}} failed.', { ok: ok, failed: failed } )
+				: i18n.t( 'importlinks:done.saved', 'Imported {{count}} bookmark(s).', { count: ok } )
+		)
+
+		$('#dest-folder, label[for="dest-folder"], #step-save .hint').hide()
+
+		setStep( 'done' )
+	}
+
+	next()
+}
+
+
+
+$(document).ready( function() {
+
+	$('#btn-extract').click( function() {
+
+		runExtract()
+	})
+
+	$('#btn-back').click( function() {
+
+		$('#status').text( '' )
+
+		setStep( step === 'save' ? 'preview' : 'input' )
+	})
+
+	$('#btn-choose').click( function() {
+
+		runChoose()
+	})
+
+	$('#btn-save').click( function() {
+
+		runSave()
+	})
+
+	$('#btn-all').click( function() {
+
+		$('#links-list input[type="checkbox"], #images-list input[type="checkbox"]').prop( 'checked', true )
+	})
+
+	$('#btn-none').click( function() {
+
+		$('#links-list input[type="checkbox"], #images-list input[type="checkbox"]').prop( 'checked', false )
+	})
+
+	$('#btn-close, #btn-cancel').click( function() {
+
+		if( saving ) return
+
+		closeModal()
+	})
+
+	setStep( 'input' )
+})

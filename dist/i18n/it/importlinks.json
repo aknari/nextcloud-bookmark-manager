@@ -1,0 +1,40 @@
+{
+  "header": "Importa link da testo",
+  "label": {
+    "source": "Incolla qui il testo",
+    "dest": "Salva nella cartella",
+    "home": "Inizio"
+  },
+  "hint": {
+    "input": "Incolla un'email, un thread, i tuoi appunti… I link contenuti vengono estratti. I link di immagini e media (X/Twitter, Reddit, miniature…) vengono esclusi.",
+    "dest": "Scegli una cartella esistente — se ne serve una nuova, creala prima dalla finestra principale.",
+    "images": "Sembrano file immagine. Seleziona quelli che vuoi comunque tenere."
+  },
+  "section": {
+    "links": "{{count}} link trovati",
+    "images": "Possibili immagini — non selezionate ({{count}})"
+  },
+  "button": {
+    "extract": "Estrai link",
+    "back": "Indietro",
+    "choose": "Scegli cartella…",
+    "save": "Salva",
+    "save_count": "Salva {{count}} segnalibro",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "all": "Tutti",
+    "none": "Nessuno"
+  },
+  "note": {
+    "ignored": "{{count}} link di immagini o media ignorati (X/Twitter, Reddit, miniature di YouTube…).",
+    "none": "Non è stato trovato alcun link in quel testo."
+  },
+  "progress": {
+    "saving": "Salvataggio {{done}}/{{total}}…"
+  },
+  "done": {
+    "saved": "Importati {{count}} segnalibro.",
+    "partial": "Importati {{ok}} segnalibro; {{failed}} non riusciti.",
+    "none_selected": "Nessun link selezionato."
+  }
+}

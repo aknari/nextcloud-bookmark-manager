@@ -163,6 +163,10 @@ module.exports.menuApp = function () {
 					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('clean-empty-folders', 'clean-empty-folders') }
 				},
 				{
+					label: i18n.t('menu:bookmarks.importlinks', 'Import Links from Text…'),
+					click (item, focusedWindow) { if(focusedWindow) focusedWindow.webContents.send('import-links', 'import-links') }
+				},
+				{
 					type: 'separator'
 				},
 				{

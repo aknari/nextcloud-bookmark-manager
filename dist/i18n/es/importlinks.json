@@ -1,0 +1,40 @@
+{
+  "header": "Importar enlaces desde texto",
+  "label": {
+    "source": "Pega aquí el texto",
+    "dest": "Guardar en la carpeta",
+    "home": "Inicio"
+  },
+  "hint": {
+    "input": "Pega un correo, un hilo, tus notas… Se extraen los enlaces que contengan. Los enlaces de imágenes y multimedia (X/Twitter, Reddit, miniaturas…) se dejan fuera.",
+    "dest": "Elige una carpeta existente — si necesitas una nueva, créala antes desde la ventana principal.",
+    "images": "Parecen archivos de imagen. Marca los que sí quieras guardar."
+  },
+  "section": {
+    "links": "{{count}} enlace(s) encontrado(s)",
+    "images": "Posibles imágenes — sin marcar ({{count}})"
+  },
+  "button": {
+    "extract": "Extraer enlaces",
+    "back": "Atrás",
+    "choose": "Elegir carpeta…",
+    "save": "Guardar",
+    "save_count": "Guardar {{count}} marcador(es)",
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "all": "Todos",
+    "none": "Ninguno"
+  },
+  "note": {
+    "ignored": "{{count}} enlace(s) de imagen o multimedia ignorados (X/Twitter, Reddit, miniaturas de YouTube…).",
+    "none": "No se ha encontrado ningún enlace en ese texto."
+  },
+  "progress": {
+    "saving": "Guardando {{done}}/{{total}}…"
+  },
+  "done": {
+    "saved": "Importados {{count}} marcador(es).",
+    "partial": "Importados {{ok}} marcador(es); {{failed}} con error.",
+    "none_selected": "No hay ningún enlace seleccionado."
+  }
+}

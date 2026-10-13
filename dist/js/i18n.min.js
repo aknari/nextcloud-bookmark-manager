@@ -51,6 +51,7 @@ const i18nextOptions = {
 		'version',
 		'autoorg',
 		'cleanup',
+		'importlinks',
 		'autotag',
 		'aiconfig',
 		'learn',

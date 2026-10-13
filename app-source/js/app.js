@@ -2549,6 +2549,16 @@ ipcRenderer.on('clean-empty-folders', (event, message) => {
 
 
 
+//note(dgmid): pull the links out of a pasted text and file them into a folder — its
+//              own window, no AI involved (the extraction rules live in link-extract)
+
+ipcRenderer.on('import-links', (event, message) => {
+	
+	modalWindow.openModal( 'file://' + __dirname + '/../html/import-links.html', 620, 660, false )
+})
+
+
+
 //note(dgmid): learn folder structure with AI — analyzes how the current folder's
 //subfolders are organized and saves the deduced criterion as a reusable profile
 

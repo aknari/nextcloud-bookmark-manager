@@ -25,7 +25,8 @@
     "learn": "Aprender estructura de carpetas…",
     "repairtitles": "Reparar Títulos…",
     "exportaz": "Exportar archivo de marcadores (A–Z)…",
-    "cleanupempty": "Limpiar carpetas vacías…"
+    "cleanupempty": "Limpiar carpetas vacías…",
+    "importlinks": "Importar enlaces desde texto…"
   },
   "edit": {
     "edit": "Editar",

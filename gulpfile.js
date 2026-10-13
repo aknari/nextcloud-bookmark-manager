@@ -51,9 +51,14 @@ gulp.task('html', () => {
 
 
 
-gulp.task('js', done => {
+//note(dgmid): the pump stream MUST be returned. With `done()` called straight away
+//gulp considered the task finished while the stream was still writing, and a file
+//could come out truncated to just its sourcemap comment (seen live: a 60-byte module
+//shipped inside the asar). The replace tasks below got the same fix.
+
+gulp.task('js', () => {
 	
-	pump([
+	return pump([
 			gulp.src(sourceJs),
 			sourcemaps.init(),
 			//uglify().on('error', function(uglify) {
@@ -67,8 +72,6 @@ gulp.task('js', done => {
 			gulp.dest(destJs)
 		]
 	)
-	
-	done()
 })
 
 
@@ -180,48 +183,40 @@ gulp.task('clean', done => {
 
 
 
-gulp.task('nodevtools', done => {
+gulp.task('nodevtools', () => {
 	
-	gulp.src(['./app-source/js/main.js','./app-source/js/menu-app.js'], {base: './'})
+	return gulp.src(['./app-source/js/main.js','./app-source/js/menu-app.js'], {base: './'})
 		.pipe(replace('//@exclude', '/*'))
 		.pipe(replace('//@end', '*/'))
 		.pipe(gulp.dest('./'))
-	
-	done()
 })
 
 
 
-gulp.task('devtools', done => {
+gulp.task('devtools', () => {
 	
-	gulp.src(['./app-source/js/main.js','./app-source/js/menu-app.js'], {base: './'})
+	return gulp.src(['./app-source/js/main.js','./app-source/js/menu-app.js'], {base: './'})
 		.pipe(replace(new RegExp('\\/\\*', 'g'), '//@exclude'))
 		.pipe(replace(new RegExp('\\*\\/', 'g'), '//@end'))
 		.pipe(gulp.dest('./'))
-	
-	done()
 })
 
 
 
-gulp.task('nowebprefs', done => {
+gulp.task('nowebprefs', () => {
 	
-	gulp.src( sourceJs, {base: './'})
+	return gulp.src( sourceJs, {base: './'})
 		.pipe(replace('devTools: true,', 'devTools: false,'))
 		.pipe(gulp.dest('./'))
-	
-	done()
 })
 
 
 
-gulp.task('webprefs', done => {
+gulp.task('webprefs', () => {
 	
-	gulp.src( sourceJs, {base: './'})
+	return gulp.src( sourceJs, {base: './'})
 		.pipe(replace('devTools: false,', 'devTools: true,'))
 		.pipe(gulp.dest('./'))
-	
-	done()
 })
 
 
