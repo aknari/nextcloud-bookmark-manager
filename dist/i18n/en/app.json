@@ -59,8 +59,9 @@
       "tags": "Tags",
       "columns": "Columns"
     },
-    "search": "Search"
-  },
+  "search": "Search",
+  "searchfolders": "Search folders"
+},
   "tagtoolbar": {
     "and": "AND",
     "or": "OR",

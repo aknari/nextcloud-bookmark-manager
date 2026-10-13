@@ -633,6 +633,48 @@ aside {
 		padding: 0 10px;
 	}
 	
+	//note(dgmid): live folder-tree filter (folder-filter.min.js). The rows it hides,
+	//and the branches it opens to reveal a match, are marked with extra classes, so
+	//clearing the box removes them and the tree returns to its previous shape.
+	.folderlist .folder-tree .folder-tree-item {
+		
+		&.filtered-out { display: none; }
+		
+		&.collapsed.filtered-open > .folder-tree { display: block; }
+	}
+	
+	#folder-search-field {
+		
+		position: relative;
+		padding: 6px 10px 2px;
+		
+		#folder-search {
+			
+			color: var(--text-color);
+			width: 100%;
+			height: 22px;
+			font-size: 12px;
+			padding: 0 24px;
+			background: #ffffff var(--icon-search) no-repeat left 5px center;
+			border: 1px solid #b9b9b9;
+			border-radius: 3px;
+			box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+		}
+		
+		#folder-search-clear {
+			
+			display: none;
+			width: 20px;
+			height: 20px;
+			background: var(--icon-clear) no-repeat center;
+			border: none;
+			outline: none;
+			position: absolute;
+			top: 7px;
+			right: 11px;
+		}
+	}
+	
 	//note(dgmid): drop-target feedback when dragging bookmarks/folders onto the sidebar tree
 	
 	.folderlist .filter.folder {

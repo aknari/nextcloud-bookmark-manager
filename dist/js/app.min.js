@@ -35,6 +35,7 @@ const modalWindow	= require( './modal.min' )
 const exp 			= require( './export.min' )
 const entities 		= require( './entities.min' )
 const folderList	= require( './folder-list.min' )
+const folderFilter	= require( './folder-filter.min' )
 const serialize		= require( './serialize.min' )
 const previews		= require( './previews.min' )
 const jqueryI18next = require( 'jquery-i18next' )
@@ -1012,14 +1013,29 @@ function buildFolderList( folders ) {
 	
 	let tree = buildTree( folders )
 	let html = renderTree( tree, 0 )
-	$('#folderlist').html( html )
-	
-	//note(dgmid): re-apply the ⌘/Ctrl multi-selection highlight after every re-render
+	$('#folderlist').html( html )	//note(dgmid): re-apply the ⌘/Ctrl multi-selection highlight after every re-render
 	for( let id of _multiSel ) {
-		
 		let a = $(`#folderlist .filter.folder[data-id="${id}"]`)
 		if( a.length ) a.addClass( 'multiselected' )
 	}
+	
+	//note(dgmid): a re-render must not undo an active folder search
+	applyFolderFilter()
+}
+
+
+
+//note(dgmid): folder tree search — the box above the tree filters it as you type.
+//folder-filter.min.js decides which rows stay and which branches open; here we only
+//read the box, hand the term over, and show/hide the clear button.
+
+function applyFolderFilter() {
+	
+	let term = $('#folder-search').val() || ''
+	
+	folderFilter.apply( $('#folderlist'), term )
+	
+	$('#folder-search-clear').toggle( term.trim().length > 0 )
 }
 
 
@@ -2785,6 +2801,32 @@ $('#clear').click(function() {
 })
 
 
+
+//note(dgmid): folder tree search — this one filters folders, not bookmarks, and it
+//never touches the table. Esc clears the box, as does its own clear button.
+
+$('#folder-search').on( 'input', function() {
+	
+	applyFolderFilter()
+})
+
+
+$('#folder-search').on( 'keydown', function( e ) {
+	
+	if( e.key === 'Escape' ) {
+		
+		$(this).val('')
+		applyFolderFilter()
+	}
+})
+
+
+$('#folder-search-clear').on( 'click', function() {
+	
+	$('#folder-search').val('').trigger( 'input' ).focus()
+})
+
+
 window.onkeydown = function(e) {
   if (e.keyCode == 32 && e.target == document.body) {
     e.preventDefault()
@@ -2846,6 +2888,7 @@ $(document).ready(function() {
 	$('#column-list label span').localize()
 	$('#add-bookmark span').html( i18n.t('app:button.new', 'Add New Bookmark') )
 	$('#search').attr('placeholder', i18n.t('app:sidebar.search', 'Search'))
+	$('#folder-search').attr('placeholder', i18n.t('app:sidebar.searchfolders', 'Search folders'))
 	
 	//note(dgmid): degraded-mode retry button — clear the flag and re-sync from the server
 	$('#degraded-retry').html( i18n.t('app:degraded.retry', 'Retry connection') )

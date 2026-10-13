@@ -59,8 +59,9 @@
       "tags": "Etiquetas",
       "columns": "Columnas"
     },
-    "search": "Buscar"
-  },
+  "search": "Buscar",
+  "searchfolders": "Buscar carpeta"
+},
   "tagtoolbar": {
     "and": "Y",
     "or": "O",

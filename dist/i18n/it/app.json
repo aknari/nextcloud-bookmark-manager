@@ -59,8 +59,9 @@
       "tags": "Tag",
       "columns": "Colonne"
     },
-    "search": "Cerca"
-  },
+  "search": "Cerca",
+  "searchfolders": "Cerca cartella"
+},
   "tagtoolbar": {
     "and": "AND",
     "or": "OR",
