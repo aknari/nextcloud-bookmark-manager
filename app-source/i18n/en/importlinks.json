@@ -5,9 +5,12 @@
     "dest": "Save into folder",
     "home": "Home"
   },
+  "select": {
+    "noresults": "No folder matches."
+  },
   "hint": {
     "input": "Paste an email, a thread, your notes… The links inside are pulled out. Image and media links (X/Twitter, Reddit, thumbnails…) are left out.",
-    "dest": "Pick an existing folder — create a new one from the main window first if you need it.",
+    "dest": "Pick an existing folder, or type its name to search it — create a new one from the main window first if you need it.",
     "images": "These look like image files. Tick the ones you do want to keep."
   },
   "section": {

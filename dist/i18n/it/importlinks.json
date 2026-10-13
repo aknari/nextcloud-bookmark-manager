@@ -5,9 +5,12 @@
     "dest": "Salva nella cartella",
     "home": "Inizio"
   },
+  "select": {
+    "noresults": "Nessuna cartella corrisponde."
+  },
   "hint": {
     "input": "Incolla un'email, un thread, i tuoi appunti… I link contenuti vengono estratti. I link di immagini e media (X/Twitter, Reddit, miniature…) vengono esclusi.",
-    "dest": "Scegli una cartella esistente — se ne serve una nuova, creala prima dalla finestra principale.",
+    "dest": "Scegli una cartella esistente, o digita il nome per cercarla — se ne serve una nuova, creala prima dalla finestra principale.",
     "images": "Sembrano file immagine. Seleziona quelli che vuoi comunque tenere."
   },
   "section": {

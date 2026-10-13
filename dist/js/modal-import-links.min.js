@@ -23,10 +23,12 @@ try {
 }
 
 jqueryI18next.init( i18n, $ )
+require( 'select2' )( $ )
 
 const fetchApi 		= require( './fetch.min' )
 const serialize 	= require( './serialize.min' )
 const extractor 	= require( './link-extract.min' )
+const folderList 	= require( './folder-list.min' )
 
 
 
@@ -68,6 +70,11 @@ function setStep( next ) {
 	$('#step-input, #step-preview, #step-save').hide()
 	$('#step-' + next).show()
 
+	//note(dgmid): the destination picker only belongs to the 'save' step. Hide (and
+	//show) it as a block: hiding the bare <select> would leave select2's own box on
+	//screen, since the widget lives next to the field, not inside it.
+	$('#dest-block').toggle( next === 'save' )
+
 	$('#btn-extract, #btn-choose, #btn-save, #btn-back, #btn-close').hide()
 
 	if( next === 'input' ) {
@@ -90,48 +97,60 @@ function setStep( next ) {
 
 
 
-//note(dgmid): destination folders — same flat tree the rest of the app keeps in
-//the store, indented one full-width space per level (as auto-organize does)
+//note(dgmid): destination folders — built with the shared folder-list helper, so the
+//list is the same hierarchy, with the same locale-aware sibling order, every other
+//picker in the app shows. select2 is what makes a long list bearable: it replaces the
+//native macOS menu (which drops the whole, always-expanded tree on screen) with a
+//dropdown you can type into.
 
-function populateDestinations() {
+let pickerReady = false
+
+function buildDestinations() {
 
 	let folders 	= store.get( 'folders' ) || [],
-		$sel 		= $( '#dest-folder' ).empty(),
-		childrenOf 	= {}
-
-	for( let f of folders ) {
-
-		let p = ( f.parent_folder == null || f.parent_folder === -1 || f.parent_folder === '-1' ) ? -1 : f.parent_folder
-
-		if( !childrenOf[p] ) childrenOf[p] = []
-
-		childrenOf[p].push( f )
-	}
-
-	for( let k in childrenOf ) {
-
-		childrenOf[k].sort( (a,b) => (a.text > b.text) ? 1 : ((b.text > a.text) ? -1 : 0) )
-	}
+		$sel 		= $( '#dest-folder' ).empty()
 
 	$sel.append( $( '<option>', {
 		value: '-1',
-		text: i18n.t( 'importlinks:label.home', 'Home' )
+		text: i18n.t( 'importlinks:label.home', 'Home' ),
+		'data-depth': 0
 	}))
 
-	function walk( pid, depth ) {
+	for( let node of folderList.buildHierarchyList( folders ) ) {
 
-		for( let c of ( childrenOf[pid] || [] ) ) {
-
-			$sel.append( $( '<option>', {
-				value: c.id,
-				text: '　'.repeat( depth ) + c.text
-			}))
-
-			walk( c.id, depth + 1 )
-		}
+		$sel.append( $( '<option>', {
+			value: node.id,
+			text: node.text,
+			'data-depth': node.depth
+		}))
 	}
+}
 
-	walk( -1, 0 )
+function initDestinationPicker() {
+
+	if( pickerReady ) return
+
+	pickerReady = true
+
+	buildDestinations()
+
+	$( '#dest-folder' ).select2({
+
+		theme: 'custom',
+		width: '100%',
+		language: {
+			noResults: function() { return i18n.t( 'importlinks:select.noresults', 'No folder matches.' ) }
+		},
+		//note(dgmid): indent folder options by depth so the dropdown reads as a tree
+		templateResult: function( data ) {
+
+			if( !data.element ) return data.text
+
+			let depth = parseInt( $( data.element ).data( 'depth' ) || 0, 10 )
+
+			return $( '<span>' ).css( 'padding-left', ( depth * 14 ) + 'px' ).text( data.text )
+		}
+	})
 }
 
 
@@ -249,7 +268,13 @@ function runChoose() {
 
 	$('#status').text( '' )
 
-	populateDestinations()
+	//note(dgmid): show the step first, then build the picker — select2 measures its
+	//box when it is created, and a hidden field measures zero
+	setStep( 'save' )
+
+	initDestinationPicker()
+
+	$( '#dest-folder' ).val( '-1' ).trigger( 'change' )
 
 	$('#save-summary').text(
 		i18n.t( 'importlinks:section.links', '{{count}} link(s) found', { count: items.length } )
@@ -258,8 +283,6 @@ function runChoose() {
 	$('#btn-save').text(
 		i18n.t( 'importlinks:button.save_count', 'Save {{count}} bookmark(s)', { count: items.length } )
 	)
-
-	setStep( 'save' )
 }
 
 
@@ -348,8 +371,6 @@ function runSave() {
 				? i18n.t( 'importlinks:done.partial', 'Imported {{ok}} bookmark(s); {{failed}} failed.', { ok: ok, failed: failed } )
 				: i18n.t( 'importlinks:done.saved', 'Imported {{count}} bookmark(s).', { count: ok } )
 		)
-
-		$('#dest-folder, label[for="dest-folder"], #step-save .hint').hide()
 
 		setStep( 'done' )
 	}

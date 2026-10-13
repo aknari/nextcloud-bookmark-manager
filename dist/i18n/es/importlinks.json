@@ -5,9 +5,12 @@
     "dest": "Guardar en la carpeta",
     "home": "Inicio"
   },
+  "select": {
+    "noresults": "Ninguna carpeta coincide."
+  },
   "hint": {
     "input": "Pega un correo, un hilo, tus notas… Se extraen los enlaces que contengan. Los enlaces de imágenes y multimedia (X/Twitter, Reddit, miniaturas…) se dejan fuera.",
-    "dest": "Elige una carpeta existente — si necesitas una nueva, créala antes desde la ventana principal.",
+    "dest": "Elige una carpeta existente, o escribe su nombre para buscarla — si necesitas una nueva, créala antes desde la ventana principal.",
     "images": "Parecen archivos de imagen. Marca los que sí quieras guardar."
   },
   "section": {
